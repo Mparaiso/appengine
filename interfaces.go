@@ -7,11 +7,6 @@ type MetadataProvider interface {
 type BeforeCreateListener interface {
 	BeforeCreate() error
 }
-
-type BeforeSaveListener interface {
-	BeforeSave() error
-}
-
 type BeforeUpdateListener interface {
 	BeforeUpdate() error
 }

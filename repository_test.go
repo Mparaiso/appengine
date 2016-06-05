@@ -12,7 +12,7 @@ type hash map[string]interface{}
 type array []interface{}
 
 func TestAll(t *testing.T) {
-	dm := before(t)
+	dm := beforeRepositoryTest(t)
 	userRepository, err := dm.GetRepository(&User{})
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestAll(t *testing.T) {
 }
 
 func TestFind(t *testing.T) {
-	dm := before(t)
+	dm := beforeRepositoryTest(t)
 	defer dm.Connection.Close()
 	userRepository, err := dm.GetRepository(new(User))
 	if err != nil {
@@ -55,7 +55,7 @@ func TestFind(t *testing.T) {
 }
 
 func TestFindBy(t *testing.T) {
-	dm := before(t)
+	dm := beforeRepositoryTest(t)
 	defer dm.Connection.Close()
 	userRepository, err := dm.GetRepository(&User{})
 	if err != nil {
@@ -86,7 +86,7 @@ func TestFindBy(t *testing.T) {
 }
 
 func TestFindBy2(t *testing.T) {
-	dm := before(t)
+	dm := beforeRepositoryTest(t)
 	defer dm.Connection.Close()
 	repository, err := dm.GetRepositoryByTableName("users")
 	if err != nil {
@@ -113,7 +113,7 @@ func TestFindBy2(t *testing.T) {
 }
 
 func TestFindBy3(t *testing.T) {
-	dm := before(t)
+	dm := beforeRepositoryTest(t)
 	defer dm.Connection.Close()
 	users := userFixture()
 	userRepository, err := dm.GetRepository(new(User))
@@ -137,7 +137,7 @@ func TestFindBy3(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	dm := before(t)
+	dm := beforeRepositoryTest(t)
 	repository, err := dm.GetRepository(&User{})
 	for i := 0; i < 3; i++ {
 		err := repository.Save(&User{Name: fmt.Sprintf("user%d", i), Email: fmt.Sprintf("user%d@acme.com", i)})

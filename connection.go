@@ -62,12 +62,14 @@ func (connection *Connection) log(messages ...interface{}) {
 	}
 }
 
-func (connection *Connection) BeginTransaction() (*sql.Tx, error) {
+func (connection *Connection) BeginTransaction() (*Transaction, error) {
 	defer connection.log("Begin transaction")
-	return connection.db.Begin()
+	transaction, err := connection.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	return &Transaction{Logger: connection.Options.Logger, Tx: transaction}, nil
 }
-
-
 
 func (connection *Connection) Close() error {
 	return connection.db.Close()

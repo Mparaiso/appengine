@@ -6,12 +6,13 @@ import (
 )
 
 type DataMapper struct {
-	Connection *Connection
-	Metadatas  map[reflect.Type]Metadata
+	Connection  *Connection
+	Metadatas   map[reflect.Type]Metadata
+	unityOfWork *UnityOfWork
 }
 
 func NewDataMapper(connection *Connection) *DataMapper {
-	return &DataMapper{connection, map[reflect.Type]Metadata{}}
+	return &DataMapper{connection, map[reflect.Type]Metadata{}, NewUnityOfWork()}
 }
 
 // Register registers entities and make a repository available
@@ -57,4 +58,37 @@ func (dm *DataMapper) GetRepositoryByEntityName(entityName string) (*Repository,
 
 func (dm *DataMapper) GetConnection() *Connection {
 	return dm.Connection
+}
+
+func (dm *DataMapper) UnityOfWork() *UnityOfWork {
+	return dm.unityOfWork
+}
+
+func (dm *DataMapper) Persist(entities ...Entity) {
+	for _, entity := range entities {
+		if dm.resolveId(entity).(int64) == 0 {
+			dm.UnityOfWork().Create(entity)
+		} else {
+			dm.UnityOfWork().Update(entity)
+		}
+	}
+}
+
+func (dm *DataMapper) Destroy(entities ...Entity) {
+	for _, entity := range entities {
+		dm.UnityOfWork().Delete(entity)
+	}
+
+}
+
+func (dm *DataMapper) Flush() error {
+	return dm.UnityOfWork().Flush(dm)
+}
+
+// resolveId gets and returns the value of the Primary Key column
+// from the model
+func (dm *DataMapper) resolveId(entity Entity) Any {
+	Type := reflect.TypeOf(entity)
+	value := reflect.Indirect(reflect.ValueOf(entity))
+	return value.FieldByName(dm.Metadatas[Type].FindIdColumn().StructField).Interface()
 }

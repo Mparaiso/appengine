@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"strings"
 )
 
 // UserRepository is a repository of users
@@ -193,62 +192,9 @@ func (repository *Repository) DeleteAll() error {
 }
 
 // Save persists an entity.
-func (repository *Repository) Save(entity Entity) error {
-	if u, ok := interface{}(entity).(BeforeSaveListener); ok == true {
-		if err := u.BeforeSave(); err != nil {
-			return err
-		}
-	}
-	if repository.resolveId(entity).(int64) == 0 {
-		if u, ok := interface{}(entity).(BeforeCreateListener); ok == true {
-			if err := u.BeforeCreate(); err != nil {
-				return err
-			}
-		}
-		paths := []string{}
-		values := []interface{}{}
-		fieldMap := repository.DM.Metadatas[repository.Type].FieldMap(entity)
-
-		for key, value := range fieldMap {
-			if strings.ToLower(key) != strings.ToLower(repository.IDField) {
-				paths = append(paths, key)
-				values = append(values, value.Interface())
-			}
-		}
-		query := fmt.Sprintf("INSERT INTO %s(%s) VALUES(%s);",
-			repository.TableName,
-			strings.Join(paths, ","),
-			strings.Join(
-				strings.Split(strings.Repeat("?", len(paths)), ""), ","))
-		result, err := repository.Connection.Exec(query, values...)
-		if err != nil {
-			return err
-		}
-		id, err := result.LastInsertId()
-		if err != nil {
-			return err
-		}
-		return repository.Find(id, entity)
-	}
-	if u, ok := interface{}(entity).(BeforeUpdateListener); ok == true {
-		if err := u.BeforeUpdate(); err != nil {
-			return err
-		}
-	}
-	// See http://stackoverflow.com/questions/24318389/golang-elem-vs-indirect-in-the-reflect-package
-
-	fieldMap := repository.DM.Metadatas[repository.Type].FieldMap(entity)
-	attributes := map[string]interface{}{}
-	for key, value := range fieldMap {
-		if strings.ToLower(key) != strings.ToLower(repository.IDField) {
-			attributes[key] = value.Interface()
-		}
-	}
-	err := repository.UpdateAttribute(entity, attributes)
-	if err != nil {
-		return err
-	}
-	return nil
+func (repository *Repository) Save(entities ...Entity) error {
+	repository.DM.Persist(entities...)
+	return repository.DM.Flush()
 }
 
 // UpdateAttribute update selected attributes

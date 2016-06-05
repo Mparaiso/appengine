@@ -105,11 +105,14 @@ func (dmm Metadata) FieldMap(entity interface{}) (fieldMap map[string]reflect.Va
 	value := reflect.Indirect(reflect.ValueOf(entity))
 	fieldMap = map[string]reflect.Value{}
 	for _, column := range dmm.Columns {
-		name := column.Name
-		if name == "" {
-			name = column.StructField
-		}
-		fieldMap[name] = value.FieldByName(column.StructField)
+		fieldMap[dmm.ResolveColumnNameFor(column)] = value.FieldByName(column.StructField)
 	}
 	return
+}
+
+func (dmm Metadata) ResolveColumnNameFor(column Column) string {
+	if column.Name == "" {
+		return column.StructField
+	}
+	return column.Name
 }

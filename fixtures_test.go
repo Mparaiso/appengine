@@ -39,10 +39,11 @@ func (Article) DataMapperMetaData() Metadata {
 
 func (a *Article) BeforeCreate() (err error) {
 	a.Created = time.Now()
+	a.Updated = time.Now()
 	return
 }
 
-func (a *Article) BeforeSave() (err error) {
+func (a *Article) BeforeUpdate() (err error) {
 	a.Updated = time.Now()
 	return
 }
@@ -78,10 +79,11 @@ func (User) DataMapperMetaData() Metadata {
 
 func (user *User) BeforeCreate() (err error) {
 	user.Created = time.Now()
+	user.Updated = time.Now()
 	return
 }
 
-func (user *User) BeforeSave() (err error) {
+func (user *User) BeforeUpdate() (err error) {
 	user.Updated = time.Now()
 	return
 }
@@ -102,6 +104,9 @@ func (user User) Authenticate(password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(user.PasswordDigest), []byte(password))
 }
 
+// NotEntity is not a valid entity
+type NotEntity struct{}
+
 func userFixture() []*User {
 	return []*User{
 		{Name: "john doe", Email: "john.doe@acme.com"},
@@ -111,8 +116,7 @@ func userFixture() []*User {
 	}
 }
 
-// before initialize in memory database
-func before(t *testing.T) *DataMapper {
+func initializeConnection(t *testing.T) *Connection {
 	db, err := sql.Open("sqlite3", ":memory:")
 
 	if err != nil {
@@ -126,9 +130,13 @@ func before(t *testing.T) *DataMapper {
 		t.Fatal(err)
 	}
 
-	connection := NewConnectionWithOptions("sqlite3", db, &ConnectionOptions{Logger: t})
-	dm := NewDataMapper(connection)
-	err = dm.Register(new(User), new(Article))
+	return NewConnectionWithOptions("sqlite3", db, &ConnectionOptions{Logger: t})
+}
+
+// before initialize in memory database
+func beforeRepositoryTest(t *testing.T) *DataMapper {
+	dm := NewDataMapper(initializeConnection(t))
+	err := dm.Register(new(User), new(Article))
 	if err != nil {
 		t.Fatal(err)
 	}
