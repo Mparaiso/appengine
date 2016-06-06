@@ -1,4 +1,4 @@
-package datamapper
+package orm
 
 import (
 	"encoding/json"

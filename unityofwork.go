@@ -1,4 +1,4 @@
-package datamapper
+package orm
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ func (u *UnityOfWork) Delete(entities ...MetadataProvider) {
 	u.deleted = append(u.deleted, entities...)
 }
 
-func (u *UnityOfWork) Flush(dm *DataMapper) error {
+func (u *UnityOfWork) Flush(dm *ORM) error {
 	// See http://stackoverflow.com/questions/24318389/golang-elem-vs-indirect-in-the-reflect-package
 
 	transaction, err := dm.Connection.BeginTransaction()
@@ -46,7 +46,7 @@ func (u *UnityOfWork) Flush(dm *DataMapper) error {
 		paths := []string{}
 		values := []interface{}{}
 		Type := reflect.TypeOf(entity)
-		metadata := dm.Metadatas[Type]
+		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper.", entity, Type)
@@ -88,7 +88,7 @@ func (u *UnityOfWork) Flush(dm *DataMapper) error {
 		}
 		values := []interface{}{}
 		Type := reflect.TypeOf(entity)
-		metadata := dm.Metadatas[Type]
+		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper.", entity, Type)
@@ -124,7 +124,7 @@ func (u *UnityOfWork) Flush(dm *DataMapper) error {
 	// Delete entities
 	for _, entity := range u.deleted {
 		Type := reflect.TypeOf(entity)
-		metadata := dm.Metadatas[Type]
+		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper.", entity, Type)

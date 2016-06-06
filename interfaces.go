@@ -1,4 +1,4 @@
-package datamapper
+package orm
 
 type MetadataProvider interface {
 	DataMapperMetaData() Metadata
@@ -16,7 +16,7 @@ type BeforeDestroyListener interface {
 }
 
 type QueryBuilder interface {
-	AcceptRepository(*Repository) (string, []interface{}, error)
+	BuildQuery(*Repository) (string, []interface{}, error)
 }
 
 type Logger interface {

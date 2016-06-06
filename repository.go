@@ -1,4 +1,4 @@
-package datamapper
+package orm
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ type Repository struct {
 	IDField    string
 	TableName  string
 	Type       reflect.Type
-	DM         *DataMapper
+	ORM        *ORM
 }
 
 // Entity is a single entity that has
@@ -25,8 +25,8 @@ type Any interface{}
 // Collection is a collection of entities
 type Collection interface{}
 
-func NewRepository(Type reflect.Type, datamapper *DataMapper) *Repository {
-	metadata, ok := datamapper.Metadatas[Type]
+func NewRepository(Type reflect.Type, datamapper *ORM) *Repository {
+	metadata, ok := datamapper.metadatas[Type]
 	if !ok {
 		log.Fatalf("Datamapper cannot manage type %s", Type)
 	}
@@ -49,17 +49,17 @@ func (repository *Repository) Find(id Any, entity Entity) error {
 
 // FindOneBy find one record filtered by query
 func (repository *Repository) FindOneBy(query QueryBuilder, entity Entity) error {
-	queryString, values, err := query.AcceptRepository(repository)
+	queryString, values, err := query.BuildQuery(repository)
 	err = repository.Connection.Get(entity, queryString, values...)
 	if err != nil {
 		return err
 	}
 	// check for one to many relations
-	metadata := repository.DM.Metadatas[repository.Type]
+	metadata := repository.ORM.metadatas[repository.Type]
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
-				targetRepository, err := repository.DM.GetRepositoryByEntityName(relation.TargetEntity)
+				targetRepository, err := repository.ORM.GetRepositoryByEntityName(relation.TargetEntity)
 				if err != nil {
 					return err
 				}
@@ -92,7 +92,7 @@ func (repository *Repository) doFindOneBy(query QueryBuilder, entity Collection)
 
 // FindBy find users by fields
 func (repository *Repository) FindBy(query QueryBuilder, collection Collection) error {
-	queryString, values, err := query.AcceptRepository(repository)
+	queryString, values, err := query.BuildQuery(repository)
 	if err != nil {
 		return err
 	}
@@ -102,12 +102,12 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 		return err
 	}
 	// check for one to many relations
-	metadata := repository.DM.Metadatas[repository.Type]
+	metadata := repository.ORM.metadatas[repository.Type]
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
 				targetEntity := relation.TargetEntity
-				targetRepository, err := repository.DM.GetRepositoryByEntityName(targetEntity)
+				targetRepository, err := repository.ORM.GetRepositoryByEntityName(targetEntity)
 				if err != nil {
 					return err
 				}
@@ -133,7 +133,7 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 				pointer.Elem().Set(slice)
 
 				// Get All related target records in one request
-				err = targetRepository.FindBy(Query{Where: whereQuery, Params: ids, OrderBy: map[string]string{relation.IndexBy: "ASC"}}, pointer.Interface())
+				err = targetRepository.FindBy(Query{Where: whereQuery, Params: ids, OrderBy: map[string]Order{relation.IndexBy: ASC}}, pointer.Interface())
 				if err != nil {
 					return err
 				}
@@ -166,7 +166,7 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 func (repository *Repository) Count(query Query) (int64, error) {
 	query.Select = []string{""}
 	query.Aggregates = []Aggregate{{Type: COUNT, StructField: "TOTAL", On: repository.IDField}}
-	queryString, values, err := query.AcceptRepository(repository)
+	queryString, values, err := query.BuildQuery(repository)
 	if err != nil {
 		return 0, err
 	}
@@ -193,8 +193,8 @@ func (repository *Repository) DeleteAll() error {
 
 // Save persists an entity.
 func (repository *Repository) Save(entities ...Entity) error {
-	repository.DM.Persist(entities...)
-	return repository.DM.Flush()
+	repository.ORM.Persist(entities...)
+	return repository.ORM.Flush()
 }
 
 // UpdateAttribute update selected attributes
@@ -229,21 +229,9 @@ func (repository *Repository) UpdateAttribute(entity Entity, fields map[string]i
 }
 
 // Destroy deletes an entity
-func (repository *Repository) Destroy(entity Entity) error {
-	id := repository.resolveId(entity)
-	result, err := repository.Connection.Exec(
-		fmt.Sprintf("DELETE FROM %s WHERE %s.%s=?", repository.TableName, repository.IDField),
-		id,
-	)
-	if err != nil {
-		return err
-	}
-	if rows, err := result.RowsAffected(); err != nil {
-		return err
-	} else if rows <= 0 {
-		return fmt.Errorf("User with ID %d could not be found and desftroyed.", id)
-	}
-	return nil
+func (repository *Repository) Destroy(entities ...Entity) error {
+	repository.ORM.Destroy(entities...)
+	return repository.ORM.Flush()
 }
 
 // resolveId gets and returns the value of the Primary Key column

@@ -1,8 +1,23 @@
-package datamapper
+package orm
 
 import (
 	"fmt"
 	"strings"
+)
+
+type Order string
+
+const (
+	ASC  Order = "ASC"
+	DESC Order = "DESC"
+)
+
+type QueryType int8
+
+const (
+	SELECT QueryType = iota
+	DELETE
+	UPDATE
 )
 
 type aggregateType string
@@ -27,38 +42,91 @@ type Aggregate struct {
 // It can be used to filter entities when they are fetched
 // from the database.
 type Query struct {
+	Type       QueryType
 	Select     []string
 	Where      []string
 	Params     []interface{}
-	OrderBy    map[string]string
+	OrderBy    map[string]Order
 	Join       []string
 	Limit      int64
 	Offset     int64
 	Aggregates []Aggregate
 }
 
-func (query Query) AcceptRepository(repository *Repository) (string, []interface{}, error) {
-	values := []interface{}{}
-	metadata := repository.DM.Metadatas[repository.Type]
-	selectStatement := ""
-	fromStatement := ""
-	whereStatement := ""
-	orderByStatement := ""
-	limitStatement := ""
-	offsetStatement := ""
-	aggregateListStatement := ""
+func (query Query) BuildQuery(repository *Repository) (string, []interface{}, error) {
 
+	switch query.Type {
+	case SELECT:
+		values := []interface{}{}
+		selectStatement, err := query.BuildSelectStatement(repository)
+		if err != nil {
+			return "", values, err
+		}
+		fromStatement := query.BuildFromStatement(repository)
+		whereStatement, v, err := query.BuildWhereStatement(repository)
+		if err != nil {
+			return "", v, err
+		}
+		values = append(values, v...)
+		orderByStatement := query.BuildOrderByStatment(repository)
+		limitStatement := query.BuildLimitStatement(repository)
+		offsetStatement := query.BuildOffsetStatement(repository)
+		q := []string{selectStatement, fromStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
+		return strings.Join(q, ""), values, nil
+	default:
+		return "", []interface{}{}, fmt.Errorf("The query type %v is not supported.", query.Type)
+	}
+
+}
+
+func (query Query) BuildLimitStatement(repository *Repository) string {
+	if query.Limit != 0 {
+		return fmt.Sprintf(" LIMIT %d ", query.Limit)
+	}
+	return ""
+}
+func (query Query) BuildOffsetStatement(repository *Repository) string {
+	if query.Offset != 0 {
+		return fmt.Sprintf(" OFFSET %d ", query.Offset)
+	}
+	return ""
+}
+
+func (query Query) BuildOrderByStatment(repository *Repository) (string, []interface{}, error) {
+	orderByStatement := ""
+	if query.OrderBy != nil {
+		metadata := repository.ORM.metadatas[repository.Type]
+		for key, value := range query.OrderBy {
+
+			columnName, ok := metadata.FindColumnNameForField(key)
+			if !ok {
+				return "", nil, fmt.Errorf("No column found for field %s in OrderBy Query Part.", columnName)
+			}
+			if orderByStatement == "" {
+				orderByStatement = fmt.Sprintf("%s %s", strings.ToLower(columnName), value)
+			} else {
+				orderByStatement = fmt.Sprintf("%s , %s %s ", orderByStatement, strings.ToLower(columnName), value)
+			}
+		}
+		return " ORDER BY " + orderByStatement, []interface{}{}, nil
+	}
+	return "", []interface{}{}, nil
+}
+
+func (query Query) BuildSelectStatement(repository *Repository) (string, error) {
+	metadata := repository.ORM.GetTypeMetadata(repository.Type)
+	aggregateListStatement := ""
 	// Get columns to be returned ( like " table.column1 AS structField1 , table.column2 AS structField2 " )
 	fieldListStatement, err := buildSelectFieldListFromColumnMetadata(metadata, query.Select...)
 	if err != nil {
-		return "", values, err
+		return "", err
 	}
 	// Create aggregation statements ( like "COUNT(TABLE.COLUMN1) AS ALIAS" )
 	if len(query.Aggregates) > 0 {
 		for _, aggregate := range query.Aggregates {
 			columnName, ok := metadata.FindColumnNameForField(aggregate.On)
 			if !ok {
-				return "", values, fmt.Errorf("StructField '%s' Not Found on aggregate %v .", aggregate.On, aggregate)
+				return "", fmt.Errorf("StructField '%s' Not Found on aggregate %v .", aggregate.On, aggregate)
 			}
 			aggregateListStatement = aggregateListStatement + " " + string(aggregate.Type) + "(" + repository.TableName + "." + columnName + ") AS " + aggregate.StructField
 		}
@@ -66,7 +134,16 @@ func (query Query) AcceptRepository(repository *Repository) (string, []interface
 			aggregateListStatement = aggregateListStatement + ", "
 		}
 	}
-	selectStatement = fmt.Sprintf("SELECT %s%s ", aggregateListStatement, fieldListStatement)
+	return fmt.Sprintf("SELECT %s%s ", aggregateListStatement, fieldListStatement), nil
+}
+
+func (query Query) BuildFromStatement(repository *Repository) string {
+	return fmt.Sprintf(" FROM %s ", repository.TableName)
+}
+
+func (query Query) BuildWhereStatement(repository *Repository) (string, []interface{}, error) {
+	values := []interface{}{}
+	metadata := repository.ORM.metadatas[repository.Type]
 	if query.Where != nil {
 		if query.Params != nil {
 			values = append(values, query.Params...)
@@ -92,34 +169,9 @@ func (query Query) AcceptRepository(repository *Repository) (string, []interface
 		if paramNumber != len(values) {
 			return "", nil, fmt.Errorf("Not enough ? placeholders for params %v in %s ", values, query.Where)
 		}
-		whereStatement = " WHERE " + strings.Join(query.Where, " ")
+		return " WHERE " + strings.Join(query.Where, " "), values, nil
 	}
-
-	if query.OrderBy != nil {
-		metadata := repository.DM.Metadatas[repository.Type]
-		for key, value := range query.OrderBy {
-
-			columnName, ok := metadata.FindColumnNameForField(key)
-			if !ok {
-				return "", nil, fmt.Errorf("No column found for field %s in OrderBy Query Part.", columnName)
-			}
-			if orderByStatement == "" {
-				orderByStatement = fmt.Sprintf("%s %s", columnName, value)
-			} else {
-				orderByStatement = fmt.Sprintf("%s , %s %s ", orderByStatement, columnName, value)
-			}
-		}
-		orderByStatement = " ORDER BY " + orderByStatement
-	}
-	if query.Limit != 0 {
-		limitStatement = fmt.Sprintf(" LIMIT %d ", query.Limit)
-	}
-	if query.Offset != 0 {
-		offsetStatement = fmt.Sprintf(" OFFSET %d ", query.Offset)
-	}
-	fromStatement = fmt.Sprintf(" FROM %s ", repository.TableName)
-	q := []string{selectStatement, fromStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
-	return strings.Join(q, ""), values, nil
+	return "", values, nil
 }
 
 // buildSelectFieldListFromColumnMetadata uses  metadata to output

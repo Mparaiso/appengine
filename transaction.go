@@ -1,4 +1,4 @@
-package datamapper
+package orm
 
 import (
 	"database/sql"
