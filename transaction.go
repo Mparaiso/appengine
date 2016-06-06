@@ -11,6 +11,11 @@ type Transaction struct {
 	Logger Logger
 }
 
+func (transaction *Transaction) Select(destination interface{}, query string, args ...interface{}) (sql.Result, error) {
+	defer transaction.log(append([]interface{}{query}, args...)...)
+	return transaction.Select(destination, query, args...)
+}
+
 func (transaction *Transaction) Exec(query string, args ...interface{}) (sql.Result, error) {
 	defer transaction.log(append([]interface{}{query}, args...)...)
 	return transaction.Tx.Exec(query, args...)

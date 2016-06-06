@@ -15,17 +15,17 @@ import (
 func TestORM(t *testing.T) {
 
 	Convey("Given a datamapper", t, func() {
-		dm := NewORM(GetConnection(t))
-		defer dm.Connection.Close()
+		orm := NewORM(GetConnection(t))
+		defer orm.Connection.Close()
 
 		Convey("When an entity is registered", func() {
-			err := dm.Register(new(User), new(Article))
+			err := orm.Register(new(User), new(Article))
 			Reset(func() {
-				repository, err := dm.GetRepository(new(User))
+				repository, err := orm.GetRepository(new(User))
 				So(err, ShouldBeNil)
 				err = repository.DeleteAll()
 				So(err, ShouldBeNil)
-				repository, err = dm.GetRepository(new(Article))
+				repository, err = orm.GetRepository(new(Article))
 				So(err, ShouldBeNil)
 				err = repository.DeleteAll()
 				So(err, ShouldBeNil)
@@ -35,28 +35,49 @@ func TestORM(t *testing.T) {
 			})
 
 			Convey("The datamapper has a repository for the entity", func() {
-				userRepository, err := dm.GetRepository(new(User))
+				userRepository, err := orm.GetRepository(new(User))
 				So(err, ShouldBeNil)
 				So(userRepository, ShouldNotBeNil)
 			})
 
 			Convey("When an entity is persisted and flushed", func() {
 				user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
-				dm.Persist(user)
-				err := dm.Flush()
+				orm.Persist(user)
+				err := orm.Flush()
 				Convey("Error should be nil", func() {
 					So(err, ShouldBeNil)
 				})
 				Convey("The entity should have a valid ID", func() {
 					So(user.ID, ShouldBeGreaterThan, 0)
 				})
+
+				Convey("Given a persisted entity", func() {
+					Convey("When an entity is updated and flushed", func() {
+						newName := "Marc Bolan"
+						user.Name = newName
+						orm.Persist(user)
+						err := orm.Flush()
+
+						Convey("Error should be nil", func() {
+							So(err, ShouldBeNil)
+						})
+
+						Convey("The reloaded entity should have the correct modifications", func() {
+							updatedUser := new(User)
+							userRepository, err := orm.GetRepository(updatedUser)
+							So(err, ShouldBeNil)
+							userRepository.Find(user.ID, updatedUser)
+							So(updatedUser.Name, ShouldEqual, user.Name)
+						})
+					})
+				})
 			})
 			Convey("When multiple entities are persisted and flushed", func() {
 				users := GetUserFixture()
 				for _, user := range users {
-					dm.Persist(user)
+					orm.Persist(user)
 				}
-				err := dm.Flush()
+				err := orm.Flush()
 
 				Convey("Error should be nil", func() {
 					So(err, ShouldBeNil)
@@ -72,7 +93,7 @@ func TestORM(t *testing.T) {
 				})
 
 				Convey("Given an entity repository", func() {
-					userRepository, err := dm.GetRepositoryByEntityName("User")
+					userRepository, err := orm.GetRepositoryByEntityName("User")
 					So(err, ShouldBeNil)
 
 					Convey("When an entity is fetched with repository.Find", func() {
@@ -88,18 +109,19 @@ func TestORM(t *testing.T) {
 							So(result.ID, ShouldEqual, users[0].ID)
 						})
 					})
-					
-					Convey("When entities are fetched with repository.FindBy",func(){
+
+					Convey("When entities are fetched with repository.FindBy", func() {
 						results := []*User{}
 						err = userRepository.FindBy(
-							Query{Where:[]string{"ID","=","?","OR","ID","=","?"},Params:array{users[0].ID,users[1].ID},OrderBy:map[string]Order{"ID":ASC}},
-							&results,
-							)
-						So(err,ShouldBeNil)
-						Convey("The result should have the right number of entities and the correct IDs",func(){
-							So(len(results),ShouldEqual,2)
-							So(results[0].ID,ShouldEqual,users[0].ID)
-							So(results[1].ID,ShouldEqual,users[1].ID)
+							Query{
+								Where:  []string{"ID", "IN", "(", "?", ",", "?", ")"},
+								Params: array{users[0].ID, users[1].ID}, OrderBy: map[string]Order{"ID": ASC},
+							}, &results)
+						So(err, ShouldBeNil)
+						Convey("The result should have the right number of entities and the correct IDs", func() {
+							So(len(results), ShouldEqual, 2)
+							So(results[0].ID, ShouldEqual, users[0].ID)
+							So(results[1].ID, ShouldEqual, users[1].ID)
 						})
 					})
 
@@ -113,12 +135,33 @@ func TestORM(t *testing.T) {
 							So(len(results), ShouldEqual, len(users))
 						})
 					})
-					
+
 				})
 
 			})
 		})
 	})
+}
+
+func TestORMPersist(t *testing.T) {
+	orm := NewORM(GetConnection(t))
+	err := orm.Register(new(User), new(Article))
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := &User{Name: "John", Email: "john@acme.com"}
+	orm.Persist(user)
+	err = orm.Flush()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("user.ID", user.ID)
+	user.Name = "Jack"
+	orm.Persist(user)
+	err = orm.Flush()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 type array []interface{}
@@ -184,7 +227,14 @@ func (User) DataMapperMetaData() Metadata {
 			{StructField: "PasswordDigest", Name: "password_digest"},
 		},
 		Relations: []Relation{
-			{StructField: "Articles", Type: OneToMany, TargetEntity: "Article", IndexBy: "AuthorID", MappedBy: "Author", Fetch: Eager},
+			{
+				StructField:  "Articles",
+				Type:         OneToMany,
+				TargetEntity: "Article",
+				IndexBy:      "AuthorID",
+				MappedBy:     "Author",
+				Fetch:        Eager,
+			},
 		},
 	}
 }

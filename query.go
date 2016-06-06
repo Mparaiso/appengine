@@ -30,12 +30,14 @@ const (
 	SUM     aggregateType = "SUM"
 )
 
+// Aggregate describes an aggregate operation like COUNT, SUM, MIN, MAX, AVG
 type Aggregate struct {
 	Type aggregateType
 	On   string
 	// StructField is the struct field that should be populated with the result of the aggregate
 	StructField string
-	Separator   string
+	// Separator used by GROUP_CONCAT
+	Separator string
 }
 
 // Query implements QueryBuilder.
@@ -51,6 +53,7 @@ type Query struct {
 	Limit      int64
 	Offset     int64
 	Aggregates []Aggregate
+	Set        map[string]interface{}
 }
 
 // BuildQuery builds the querystring with placeholders , returns it with the parameters
@@ -78,10 +81,34 @@ func (query Query) BuildQuery(repository *Repository) (string, []interface{}, er
 		offsetStatement := query.buildOffsetStatement(repository)
 		q := []string{selectStatement, fromStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
 		return strings.Join(q, ""), values, nil
+	case UPDATE:
+		updateStatement, values := query.buildUpdateStatement(repository)
+		whereStatement, v, err := query.buildWhereStatement(repository)
+		if err != nil {
+			return "", values, err
+		}
+		values = append(values, v...)
+		q := strings.Join([]string{updateStatement, whereStatement, ";"}, "")
+		return q, values, nil
 	default:
 		return "", []interface{}{}, fmt.Errorf("The query type %v is not supported.", query.Type)
 	}
 
+}
+
+func (query Query) buildUpdateStatement(repository *Repository) (string, []interface{}) {
+	setStatement := ""
+	values := []interface{}{}
+	metadata := repository.ORM.GetTypeMetadata(repository.Type)
+	fieldMap := query.Set
+	for key, value := range fieldMap {
+		columnName := strings.ToLower(metadata.FindColumnNameForField(key))
+		setStatement = fmt.Sprintf("%s %s = ? ,", setStatement, columnName)
+		values = append(values, value)
+	}
+	setStatement = strings.TrimLeft(strings.TrimSuffix(setStatement, " ,")," ")
+	updateStatement := fmt.Sprintf("UPDATE %s SET %s", metadata.Table.Name, setStatement)
+	return updateStatement, values
 }
 
 func (query Query) buildLimitStatement(repository *Repository) string {
@@ -90,6 +117,7 @@ func (query Query) buildLimitStatement(repository *Repository) string {
 	}
 	return ""
 }
+
 func (query Query) buildOffsetStatement(repository *Repository) string {
 	if query.Offset != 0 {
 		return fmt.Sprintf(" OFFSET %d ", query.Offset)
@@ -103,8 +131,8 @@ func (query Query) buildOrderByStatment(repository *Repository) (string, error) 
 		metadata := repository.ORM.metadatas[repository.Type]
 		for key, value := range query.OrderBy {
 
-			columnName, ok := metadata.FindColumnNameForField(key)
-			if !ok {
+			columnName := metadata.FindColumnNameForField(key)
+			if columnName == "" {
 				return "", fmt.Errorf("No column found for field %s in OrderBy Query Part.", columnName)
 			}
 			if orderByStatement == "" {
@@ -129,8 +157,8 @@ func (query Query) buildSelectStatement(repository *Repository) (string, error) 
 	// Create aggregation statements ( like "COUNT(TABLE.COLUMN1) AS ALIAS" )
 	if len(query.Aggregates) > 0 {
 		for _, aggregate := range query.Aggregates {
-			columnName, ok := metadata.FindColumnNameForField(aggregate.On)
-			if !ok {
+			columnName := metadata.FindColumnNameForField(aggregate.On)
+			if columnName == "" {
 				return "", fmt.Errorf("StructField '%s' Not Found on aggregate %v .", aggregate.On, aggregate)
 			}
 			buildFromStatement = buildFromStatement + " " + string(aggregate.Type) + "(" + repository.TableName + "." + columnName + ") AS " + aggregate.StructField
@@ -163,8 +191,8 @@ func (query Query) buildWhereStatement(repository *Repository) (string, []interf
 					return "", nil, fmt.Errorf("Unexpected token %s at index %d in Query.Where", token, index)
 				}
 				fieldName := query.Where[index-1]
-				columnName, ok := metadata.FindColumnNameForField(fieldName)
-				if !ok {
+				columnName := metadata.FindColumnNameForField(fieldName)
+				if columnName == "" {
 					return "", nil, fmt.Errorf("No column found for field %s in Where Query Part.", fieldName)
 				}
 				query.Where[index-1] = metadata.Table.Name + "." + strings.ToLower(columnName)

@@ -79,7 +79,9 @@ func (orm *ORM) UnityOfWork() *UnityOfWork {
 }
 
 func (orm *ORM) Persist(entities ...Entity) {
+	
 	for _, entity := range entities {
+		
 		if orm.resolveId(entity).(int64) == 0 {
 			orm.UnityOfWork().Create(entity)
 		} else {
@@ -104,5 +106,5 @@ func (orm *ORM) Flush() error {
 func (orm *ORM) resolveId(entity Entity) Any {
 	Type := reflect.TypeOf(entity)
 	value := reflect.Indirect(reflect.ValueOf(entity))
-	return value.FieldByName(orm.metadatas[Type].FindIdColumn().StructField).Interface()
+	return value.FieldByName(orm.GetTypeMetadata(Type).FindIdColumn().StructField).Interface()
 }

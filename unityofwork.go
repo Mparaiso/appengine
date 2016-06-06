@@ -21,7 +21,7 @@ func (u *UnityOfWork) Create(entities ...MetadataProvider) {
 }
 
 func (u *UnityOfWork) Update(entities ...MetadataProvider) {
-	u.created = append(u.updated, entities...)
+	u.updated = append(u.updated, entities...)
 }
 
 func (u *UnityOfWork) Delete(entities ...MetadataProvider) {
@@ -49,7 +49,7 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper.", entity, Type)
+			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
 		fieldMap := metadata.FieldMap(entity)
 		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
@@ -91,35 +91,39 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper.", entity, Type)
+			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		fieldMap := metadata.FieldMap(entity)
-		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
-		tableName := metadata.Table.Name
-		setStatement := "SET"
-		var id interface{}
-		for key, value := range fieldMap {
-			if strings.ToLower(key) != strings.ToLower(idColumn) {
-				setStatement = fmt.Sprintf("%s %s = ? ,", setStatement, key)
-				values = append(values, value.Interface())
-			} else {
-				id = value.Interface()
+		Set := map[string]interface{}{}
+		IDField := metadata.FindIdColumn().StructField
+		entityValue := reflect.Indirect(reflect.ValueOf(entity))
+		ID := entityValue.FieldByName(IDField).Interface()
+		for _, column := range metadata.Columns {
+			if column.StructField != IDField {
+				Set[column.StructField] = entityValue.FieldByName(column.StructField).Interface()
 			}
 		}
-
-		query := fmt.Sprintf("UPDATE %s WHERE %s = ? ;",
-			tableName,
-			setStatement,
-			idColumn)
-		result, err := transaction.Exec(query, append(values, id)...)
-		if _, err := result.RowsAffected(); err != nil {
-			transaction.Rollback()
-			return err
-		}
+		repository, err := dm.GetRepository(entity)
 		if err != nil {
 			transaction.Rollback()
 			return err
 		}
+		query, values, err := Query{
+			Type:   UPDATE,
+			Set:    Set,
+			Where:  []string{IDField, "=", "?"},
+			Params: []interface{}{ID},
+		}.BuildQuery(repository)
+
+		result, err := transaction.Exec(query, values...)
+		if err != nil {
+			transaction.Rollback()
+			return err
+		}
+		if _, err := result.RowsAffected(); err != nil {
+			transaction.Rollback()
+			return err
+		}
+
 	}
 	// Delete entities
 	for _, entity := range u.deleted {
@@ -127,7 +131,7 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper.", entity, Type)
+			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
 		tableName := metadata.Table.Name
 		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
