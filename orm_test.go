@@ -42,8 +42,11 @@ func TestORM(t *testing.T) {
 
 			Convey("When an entity is persisted and flushed", func() {
 				user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
+				userRepository, err := orm.GetRepository(user)
+				So(err, ShouldBeNil)
 				orm.Persist(user)
-				err := orm.Flush()
+				err = orm.Flush()
+				So(err, ShouldBeNil)
 				Convey("Error should be nil", func() {
 					So(err, ShouldBeNil)
 				})
@@ -52,6 +55,7 @@ func TestORM(t *testing.T) {
 				})
 
 				Convey("Given a persisted entity", func() {
+
 					Convey("When an entity is updated and flushed", func() {
 						newName := "Marc Bolan"
 						user.Name = newName
@@ -64,11 +68,23 @@ func TestORM(t *testing.T) {
 
 						Convey("The reloaded entity should have the correct modifications", func() {
 							updatedUser := new(User)
-							userRepository, err := orm.GetRepository(updatedUser)
-							So(err, ShouldBeNil)
 							userRepository.Find(user.ID, updatedUser)
 							So(updatedUser.Name, ShouldEqual, user.Name)
 						})
+					})
+
+					Convey("When an entity is destroyed", func() {
+						id := user.ID
+						orm.Destroy(user)
+						err = orm.Flush()
+						So(err, ShouldBeNil)
+
+						Convey("It shouldn't exist in the database as a record.", func() {
+							u := new(User)
+							err = userRepository.Find(id, u)
+							So(err, ShouldEqual, sql.ErrNoRows)
+						})
+
 					})
 				})
 			})
