@@ -16,6 +16,7 @@ type QueryType int8
 
 const (
 	SELECT QueryType = iota
+	INSERT
 	DELETE
 	UPDATE
 )
@@ -61,18 +62,17 @@ type Query struct {
 func (query Query) BuildQuery(repository *Repository) (string, []interface{}, error) {
 
 	switch query.Type {
+
 	case SELECT:
-		values := []interface{}{}
+		fromStatement := query.buildFromStatement(repository)
+		whereStatement, values, err := query.buildWhereStatement(repository)
+		if err != nil {
+			return "", values, err
+		}
 		selectStatement, err := query.buildSelectStatement(repository)
 		if err != nil {
 			return "", values, err
 		}
-		fromStatement := query.buildFromStatement(repository)
-		whereStatement, v, err := query.buildWhereStatement(repository)
-		if err != nil {
-			return "", values, err
-		}
-		values = append(values, v...)
 		orderByStatement, err := query.buildOrderByStatment(repository)
 		if err != nil {
 			return "", values, err
@@ -81,6 +81,7 @@ func (query Query) BuildQuery(repository *Repository) (string, []interface{}, er
 		offsetStatement := query.buildOffsetStatement(repository)
 		q := []string{selectStatement, fromStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
 		return strings.Join(q, ""), values, nil
+
 	case UPDATE:
 		updateStatement, values := query.buildUpdateStatement(repository)
 		whereStatement, v, err := query.buildWhereStatement(repository)
@@ -90,10 +91,48 @@ func (query Query) BuildQuery(repository *Repository) (string, []interface{}, er
 		values = append(values, v...)
 		q := strings.Join([]string{updateStatement, whereStatement, ";"}, "")
 		return q, values, nil
+
+	case DELETE:
+		deleteStatement := fmt.Sprintf("DELETE FROM %s ", repository.TableName)
+		whereStatement, values, err := query.buildWhereStatement(repository)
+		if err != nil {
+			return "", values, err
+		}
+		limitStatement := query.buildLimitStatement(repository)
+		query := deleteStatement + whereStatement + limitStatement + ";"
+		return query, values, nil
+
+	case INSERT:
+		return query.buildInsertStatment(repository)
+
 	default:
 		return "", []interface{}{}, fmt.Errorf("The query type %v is not supported.", query.Type)
 	}
 
+}
+
+func (query Query) buildInsertStatment(repository *Repository) (string, []interface{}, error) {
+	values := []interface{}{}
+	columns := []string{}
+	idColumn := repository.IDField
+	tableName := repository.TableName
+	metadata := repository.ORM.GetTypeMetadata(repository.Type)
+	for key, value := range query.Set {
+		if key != idColumn {
+			column := metadata.ResolveColumnNameByFieldName(key)
+			if column == "" {
+				return "", values, fmt.Errorf("No Column found for Field %s in Set for INSERT query", key)
+			}
+			columns = append(columns, strings.ToLower(column))
+			values = append(values, value)
+		}
+	}
+	q := fmt.Sprintf("INSERT INTO %s(%s) VALUES(%s);",
+		tableName,
+		strings.Join(columns, ","),
+		strings.Join(
+			strings.Split(strings.Repeat("?", len(columns)), ""), ","))
+	return q, values, nil
 }
 
 func (query Query) buildUpdateStatement(repository *Repository) (string, []interface{}) {
@@ -102,11 +141,11 @@ func (query Query) buildUpdateStatement(repository *Repository) (string, []inter
 	metadata := repository.ORM.GetTypeMetadata(repository.Type)
 	fieldMap := query.Set
 	for key, value := range fieldMap {
-		columnName := strings.ToLower(metadata.FindColumnNameForField(key))
+		columnName := strings.ToLower(metadata.ResolveColumnNameByFieldName(key))
 		setStatement = fmt.Sprintf("%s %s = ? ,", setStatement, columnName)
 		values = append(values, value)
 	}
-	setStatement = strings.TrimLeft(strings.TrimSuffix(setStatement, " ,")," ")
+	setStatement = strings.TrimLeft(strings.TrimSuffix(setStatement, " ,"), " ")
 	updateStatement := fmt.Sprintf("UPDATE %s SET %s", metadata.Table.Name, setStatement)
 	return updateStatement, values
 }
@@ -131,7 +170,7 @@ func (query Query) buildOrderByStatment(repository *Repository) (string, error) 
 		metadata := repository.ORM.metadatas[repository.Type]
 		for key, value := range query.OrderBy {
 
-			columnName := metadata.FindColumnNameForField(key)
+			columnName := metadata.ResolveColumnNameByFieldName(key)
 			if columnName == "" {
 				return "", fmt.Errorf("No column found for field %s in OrderBy Query Part.", columnName)
 			}
@@ -157,7 +196,7 @@ func (query Query) buildSelectStatement(repository *Repository) (string, error) 
 	// Create aggregation statements ( like "COUNT(TABLE.COLUMN1) AS ALIAS" )
 	if len(query.Aggregates) > 0 {
 		for _, aggregate := range query.Aggregates {
-			columnName := metadata.FindColumnNameForField(aggregate.On)
+			columnName := metadata.ResolveColumnNameByFieldName(aggregate.On)
 			if columnName == "" {
 				return "", fmt.Errorf("StructField '%s' Not Found on aggregate %v .", aggregate.On, aggregate)
 			}
@@ -191,7 +230,7 @@ func (query Query) buildWhereStatement(repository *Repository) (string, []interf
 					return "", nil, fmt.Errorf("Unexpected token %s at index %d in Query.Where", token, index)
 				}
 				fieldName := query.Where[index-1]
-				columnName := metadata.FindColumnNameForField(fieldName)
+				columnName := metadata.ResolveColumnNameByFieldName(fieldName)
 				if columnName == "" {
 					return "", nil, fmt.Errorf("No column found for field %s in Where Query Part.", fieldName)
 				}

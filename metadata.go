@@ -84,7 +84,7 @@ func (dmm Metadata) FindIdColumn() Column {
 	return column
 }
 
-func (dmm Metadata) FindColumnNameForField(fieldName string) string{
+func (dmm Metadata) ResolveColumnNameByFieldName(fieldName string) string {
 	columnName := ""
 	for _, column := range dmm.Columns {
 		if fieldName == column.StructField {
@@ -97,6 +97,15 @@ func (dmm Metadata) FindColumnNameForField(fieldName string) string{
 		}
 	}
 	return columnName
+}
+
+func (dmm Metadata) BuildFieldValueMap(entity interface{}) map[string]interface{} {
+	Set := map[string]interface{}{}
+	entityValue := reflect.Indirect(reflect.ValueOf(entity))
+	for _, column := range dmm.Columns {
+		Set[column.StructField] = entityValue.FieldByName(column.StructField).Interface()
+	}
+	return Set
 }
 
 func (dmm Metadata) FieldMap(entity interface{}) (fieldMap map[string]reflect.Value) {

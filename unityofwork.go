@@ -3,7 +3,6 @@ package orm
 import (
 	"fmt"
 	"reflect"
-	"strings"
 )
 
 type UnityOfWork struct {
@@ -43,7 +42,6 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 				return err
 			}
 		}
-		paths := []string{}
 		values := []interface{}{}
 		Type := reflect.TypeOf(entity)
 		metadata := dm.metadatas[Type]
@@ -51,21 +49,17 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		fieldMap := metadata.FieldMap(entity)
-		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
-		tableName := metadata.Table.Name
-
-		for key, value := range fieldMap {
-			if strings.ToLower(key) != strings.ToLower(idColumn) {
-				paths = append(paths, key)
-				values = append(values, value.Interface())
-			}
+		repository,err:=dm.GetRepository(entity)
+		if err!=nil{
+			transaction.Rollback()
+			return err
 		}
-		query := fmt.Sprintf("INSERT INTO %s(%s) VALUES(%s);",
-			tableName,
-			strings.Join(paths, ","),
-			strings.Join(
-				strings.Split(strings.Repeat("?", len(paths)), ""), ","))
+		Set := metadata.BuildFieldValueMap(entity)
+		query,values,err := Query{Type:INSERT,Set:Set}.BuildQuery(repository)
+		if err!=nil{
+			transaction.Rollback()
+			return err
+		}
 		result, err := transaction.Exec(query, values...)
 		if err != nil {
 			transaction.Rollback()
@@ -93,15 +87,10 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		Set := map[string]interface{}{}
+		Set := metadata.BuildFieldValueMap(entity)
 		IDField := metadata.FindIdColumn().StructField
 		entityValue := reflect.Indirect(reflect.ValueOf(entity))
 		ID := entityValue.FieldByName(IDField).Interface()
-		for _, column := range metadata.Columns {
-			if column.StructField != IDField {
-				Set[column.StructField] = entityValue.FieldByName(column.StructField).Interface()
-			}
-		}
 		repository, err := dm.GetRepository(entity)
 		if err != nil {
 			transaction.Rollback()
@@ -128,15 +117,28 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 	// Delete entities
 	for _, entity := range u.deleted {
 		Type := reflect.TypeOf(entity)
+
 		metadata := dm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		tableName := metadata.Table.Name
+		repository, err := dm.GetRepository(entity)
+		if err != nil {
+			transaction.Rollback()
+			return err
+		}
 		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
-		_, err := transaction.Exec(fmt.Sprintf("DELETE FROM %s WHERE %s = ? LIMIT 1 ;", tableName, idColumn),
-			reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().StructField).Interface())
+		id := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().StructField).Interface()
+		query, values, err := Query{Type: DELETE,
+			Where:  []string{idColumn, "=", "?"},
+			Params: []interface{}{id},
+		}.BuildQuery(repository)
+		if err != nil {
+			transaction.Rollback()
+			return err
+		}
+		_, err = transaction.Exec(query, values...)
 		if err != nil {
 			transaction.Rollback()
 			return err

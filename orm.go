@@ -79,9 +79,9 @@ func (orm *ORM) UnityOfWork() *UnityOfWork {
 }
 
 func (orm *ORM) Persist(entities ...Entity) {
-	
+
 	for _, entity := range entities {
-		
+
 		if orm.resolveId(entity).(int64) == 0 {
 			orm.UnityOfWork().Create(entity)
 		} else {

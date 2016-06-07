@@ -22,7 +22,7 @@ type Connection struct {
 func NewConnection(driverName string, DB *sql.DB) *Connection {
 	return NewConnectionWithOptions(driverName, DB, &ConnectionOptions{})
 }
-
+// NewConnectionWithOptions creates an new connection with optional settings such as Logging.
 func NewConnectionWithOptions(driverName string, DB *sql.DB, options *ConnectionOptions) *Connection {
 	return &Connection{sqlx.NewDb(DB, driverName), driverName, options}
 }
