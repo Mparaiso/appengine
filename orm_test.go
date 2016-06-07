@@ -164,21 +164,21 @@ func TestORMPersist(t *testing.T) {
 	}
 }
 
-func TestORMDestroy(t *testing.T){
-	orm:= NewORM(GetConnection(t))
-	err:= orm.Register(new(User),new(Article))
-	if err!=nil{
+func TestORMDestroy(t *testing.T) {
+	orm := NewORM(GetConnection(t))
+	err := orm.Register(new(User), new(Article))
+	if err != nil {
 		t.Fatal(err)
 	}
-	user:=&User{Name:"John",Email:"john@acme.com"}
+	user := &User{Name: "John", Email: "john@acme.com"}
 	orm.Persist(user)
-	err=orm.Flush()
-	if err!=nil{
+	err = orm.Flush()
+	if err != nil {
 		t.Fatal(err)
 	}
 	orm.Destroy(user)
 	err = orm.Flush()
-	if err!=nil{
+	if err != nil {
 		t.Fatal(err)
 	}
 }

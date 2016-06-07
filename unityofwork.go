@@ -49,14 +49,14 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		repository,err:=dm.GetRepository(entity)
-		if err!=nil{
+		repository, err := dm.GetRepository(entity)
+		if err != nil {
 			transaction.Rollback()
 			return err
 		}
 		Set := metadata.BuildFieldValueMap(entity)
-		query,values,err := Query{Type:INSERT,Set:Set}.BuildQuery(repository)
-		if err!=nil{
+		query, values, err := Query{Type: INSERT, Set: Set}.BuildQuery(repository)
+		if err != nil {
 			transaction.Rollback()
 			return err
 		}
