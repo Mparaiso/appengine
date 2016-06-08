@@ -1,7 +1,7 @@
 package orm
 
 type MetadataProvider interface {
-	DataMapperMetaData() Metadata
+	ProvideMetadata() Metadata
 }
 
 type BeforeCreateListener interface {

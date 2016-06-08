@@ -23,7 +23,7 @@ func (u *UnityOfWork) Update(entities ...MetadataProvider) {
 	u.updated = append(u.updated, entities...)
 }
 
-func (u *UnityOfWork) Delete(entities ...MetadataProvider) {
+func (u *UnityOfWork) Remove(entities ...MetadataProvider) {
 	u.deleted = append(u.deleted, entities...)
 }
 

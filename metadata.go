@@ -16,13 +16,12 @@ const (
 	OneToMany
 )
 
-type Cascade int8
+type Cascade byte
 
 const (
-	_ Cascade = iota
-	Persist
-	Remove
-	Merge
+	Persist Cascade = 0x01
+	Remove  Cascade = 0x02
+	Merge   Cascade = 0x04
 )
 
 type Fetch int8
@@ -48,12 +47,18 @@ type Column struct {
 
 // Relation Represents a relation between 2 entities
 type Relation struct {
-	Type         RelationType
+	// The Type of relation
+	Type RelationType
+	// The entity which is the target of the relation
 	TargetEntity string
 	MappedBy     string
 	IndexBy      string
 	Cascade
+	// Whether the related entities are loaded
+	// automatically or not.
 	Fetch
+	// The field where to load the related entities
+	// if needed.
 	StructField string
 }
 

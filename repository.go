@@ -114,18 +114,6 @@ func (repository *Repository) DeleteAll() error {
 	return nil
 }
 
-// Save persists an entity.
-func (repository *Repository) Save(entities ...Entity) error {
-	repository.ORM.Persist(entities...)
-	return repository.ORM.Flush()
-}
-
-// Destroy deletes an entity
-func (repository *Repository) Destroy(entities ...Entity) error {
-	repository.ORM.Destroy(entities...)
-	return repository.ORM.Flush()
-}
-
 // doFindBy finds entities without fetching related entities
 func (repository *Repository) doFindBy(query QueryBuilder, collection Collection) error {
 	queryString, values, err := query.BuildQuery(repository)
@@ -154,15 +142,19 @@ func (repository *Repository) resolveId(entity Entity) Any {
 func (repository *Repository) resolveOneToMany(relation Relation, collection interface{}) error {
 	if relation.Fetch == Eager {
 		if relation.Type == OneToMany {
-			targetEntity := relation.TargetEntity
-			targetRepository, err := repository.ORM.GetRepositoryByEntityName(targetEntity)
+			// The type name of the owned entity (string)
+			ownedEntity := relation.TargetEntity
+			// The repository that is used to fetch the owned
+			ownedEntityRepository, err := repository.ORM.GetRepositoryByEntityName(ownedEntity)
 			if err != nil {
 				return err
 			}
 
 			// Get all collection IDs
 			ids := []interface{}{}
+			// the reflect.Value of the collection, for reflection purposes
 			collectionValue := reflect.Indirect(reflect.ValueOf(collection))
+			// Fill with IDs to fetch
 			collectionLength := collectionValue.Len()
 			for i := 0; i < collectionLength; i++ {
 				entityValue := reflect.Indirect(collectionValue.Index(i))
@@ -176,31 +168,33 @@ func (repository *Repository) resolveOneToMany(relation Relation, collection int
 			whereQuery[len(whereQuery)-1] = ")"
 
 			// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
-			slice := reflect.MakeSlice(reflect.SliceOf(targetRepository.Type), 0, 0)
-			pointer := reflect.New(slice.Type())
-			pointer.Elem().Set(slice)
+			sliceOfOwnedEntities := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.Type), 0, 0)
+			pointer := reflect.New(sliceOfOwnedEntities.Type())
+			pointer.Elem().Set(sliceOfOwnedEntities)
 
 			// Get All related target records in one request
-			err = targetRepository.doFindBy(Query{Where: whereQuery, Params: ids, OrderBy: map[string]Order{relation.IndexBy: ASC}}, pointer.Interface())
+			err = ownedEntityRepository.doFindBy(Query{Where: whereQuery, Params: ids, OrderBy: map[string]Order{relation.IndexBy: ASC}}, pointer.Interface())
 			if err != nil {
 				return err
 			}
 			// assign target records to the returned collection entities
-			targetRecordMap := map[interface{}][]reflect.Value{}
-			targetSliceLength := slice.Len()
-			for i := 0; i < targetSliceLength; i++ {
-				targetRecord := slice.Index(i)
-				index := targetRecord.FieldByName(relation.IndexBy).Interface()
-				if _, ok := targetRecordMap[index]; !ok {
-					targetRecordMap[index] = []reflect.Value{}
+			sliceOfOwnedEntities = pointer.Elem()
+			ownedEntitiesMap := map[interface{}][]reflect.Value{}
+			sliceOfOwnedEntitiesLength := sliceOfOwnedEntities.Len()
+			for i := 0; i < sliceOfOwnedEntitiesLength; i++ {
+				ownedEntity := sliceOfOwnedEntities.Index(i)
+				owningEntityIndex := reflect.Indirect(ownedEntity).FieldByName(relation.IndexBy).Interface()
+				if _, ok := ownedEntitiesMap[owningEntityIndex]; !ok {
+					ownedEntitiesMap[owningEntityIndex] = []reflect.Value{}
 				}
-				targetRecordMap[index] = append(targetRecordMap[index], targetRecord)
+				ownedEntitiesMap[owningEntityIndex] = append(ownedEntitiesMap[owningEntityIndex], ownedEntity)
 			}
 			// add target records to each entity of the returned collection
 			for i := 0; i < collectionLength; i++ {
 				entityValue := reflect.Indirect(collectionValue.Index(i))
-				sliceValue := reflect.MakeSlice(reflect.SliceOf(targetRepository.Type), 0, 0)
-				sliceValue = reflect.Append(sliceValue, targetRecordMap[entityValue.FieldByName(repository.IDField).Interface()]...)
+				// the slice value will contain the owned entities owned by the owning entity.
+				sliceValue := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.Type), 0, 0)
+				sliceValue = reflect.Append(sliceValue, ownedEntitiesMap[entityValue.FieldByName(repository.IDField).Interface()]...)
 				entityValue.FieldByName(relation.StructField).Set(sliceValue)
 			}
 			return nil
@@ -226,13 +220,11 @@ func (repository *Repository) resolveOneToManySingle(relation Relation, entity E
 					Params: []interface{}{repository.resolveId(entity)},
 				}, pointer.Interface(),
 			)
-
 			if err != nil {
 				return err
 			}
-			StructFieldValue := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(relation.StructField)
-
-			StructFieldValue.Set(slice)
+			entityValue := reflect.Indirect(reflect.ValueOf(entity))
+			entityValue.FieldByName(relation.StructField).Set(pointer.Elem())
 			return nil
 		}
 	}

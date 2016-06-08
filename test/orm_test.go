@@ -1,11 +1,10 @@
-package orm_test
+package test_test
 
 import (
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/crypto/bcrypt"
 	"testing"
-	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	. "github.com/mparaiso/go-orm"
 	"github.com/rubenv/sql-migrate"
@@ -14,12 +13,16 @@ import (
 
 func TestORM(t *testing.T) {
 
-	Convey("Given a datamapper", t, func() {
+	Convey("Given an ORM", t, func() {
 		orm := NewORM(GetConnection(t))
 		defer orm.Connection.Close()
 
-		Convey("When an entity is registered", func() {
+		Convey("Given multiple entities registered in the ORM", func() {
 			err := orm.Register(new(User), new(Article))
+			userRepository, err := orm.GetRepository(new(User))
+			So(err, ShouldBeNil)
+			//articleRepository, err := orm.GetRepository(new(Article))
+			//So(err, ShouldBeNil)
 			Reset(func() {
 				repository, err := orm.GetRepository(new(User))
 				So(err, ShouldBeNil)
@@ -42,8 +45,7 @@ func TestORM(t *testing.T) {
 
 			Convey("When an entity is persisted and flushed", func() {
 				user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
-				userRepository, err := orm.GetRepository(user)
-				So(err, ShouldBeNil)
+
 				orm.Persist(user)
 				err = orm.Flush()
 				So(err, ShouldBeNil)
@@ -75,7 +77,7 @@ func TestORM(t *testing.T) {
 
 					Convey("When an entity is destroyed", func() {
 						id := user.ID
-						orm.Destroy(user)
+						orm.Remove(user)
 						err = orm.Flush()
 						So(err, ShouldBeNil)
 
@@ -88,6 +90,7 @@ func TestORM(t *testing.T) {
 					})
 				})
 			})
+
 			Convey("When multiple entities are persisted and flushed", func() {
 				users := GetUserFixture()
 				for _, user := range users {
@@ -155,6 +158,46 @@ func TestORM(t *testing.T) {
 				})
 
 			})
+
+			Convey("Given 2 entities with a OneToMany relationship", func() {
+				user := &User{Name: "Jack Doe", Email: "jack.doe@acme.com"}
+				orm.Persist(user)
+				err = orm.Flush()
+				So(err, ShouldBeNil)
+				articles := []*Article{
+					{Title: "First Article Title", Content: "First Article Content"},
+					{Title: "Second Article Title", Content: "Second Article Content"},
+				}
+				user.AddArticles(articles...)
+				//err = orm.Persist(articles[0], articles[1]).Flush()
+				Convey("Given that the owning side relationship cascades on persist", func() {
+					orm.Persist(user).Flush()
+					So(err, ShouldBeNil)
+					Convey("When the owning entity is fetched with repository.Find", func() {
+						fetchedUser := new(User)
+						err = userRepository.Find(user.ID, fetchedUser)
+						So(err, ShouldBeNil)
+						Convey("The owning entity should have many related entities", func() {
+							So(fetchedUser.Articles, ShouldNotBeNil)
+							So(len(fetchedUser.Articles), ShouldEqual, 2)
+						})
+					})
+					Convey("When the owning entity is fetched with repository.FindBy", func() {
+						fetchedUsers := []*User{}
+						err = userRepository.FindBy(Query{Where: []string{"ID", "=", "?"}, Params: []interface{}{user.ID}}, &fetchedUsers)
+						So(err, ShouldBeNil)
+						So(len(fetchedUsers), ShouldEqual, 1)
+						Convey("The owning entity should have many related entities", func() {
+							So(fetchedUsers[0].Articles, ShouldNotBeNil)
+							So(len(fetchedUsers[0].Articles), ShouldEqual, 2)
+						})
+					})
+				})
+
+				Convey("Given that the ownind side relationship cascades on delete", func() {
+
+				})
+			})
 		})
 	})
 }
@@ -192,7 +235,7 @@ func TestORMDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	orm.Destroy(user)
+	orm.Remove(user)
 	err = orm.Flush()
 	if err != nil {
 		t.Fatal(err)
@@ -200,109 +243,6 @@ func TestORMDestroy(t *testing.T) {
 }
 
 type array []interface{}
-
-// Article is an article
-type Article struct {
-	ID       int64
-	Title    string
-	Content  string
-	Created  time.Time
-	Updated  time.Time
-	Author   *User
-	AuthorID int64
-}
-
-func (Article) DataMapperMetaData() Metadata {
-	return Metadata{
-		Entity: "Article",
-		Table:  Table{Name: "articles"},
-		Columns: []Column{
-			{ID: true, StructField: "ID"},
-			{StructField: "Title"},
-			{StructField: "Content"},
-			{StructField: "Created"},
-			{StructField: "Updated"},
-			{StructField: "AuthorID", Name: "author_id"},
-		},
-	}
-}
-
-func (a *Article) BeforeCreate() (err error) {
-	a.Created = time.Now()
-	a.Updated = time.Now()
-	return
-}
-
-func (a *Article) BeforeUpdate() (err error) {
-	a.Updated = time.Now()
-	return
-}
-
-// User is a user
-type User struct {
-	ID             int64
-	Name           string
-	Email          string
-	Created        time.Time
-	Updated        time.Time
-	PasswordDigest string
-	Articles       []*Article
-}
-
-func (User) DataMapperMetaData() Metadata {
-	return Metadata{
-		Entity: "User",
-		Table:  Table{Name: "users"},
-		Columns: []Column{
-			{ID: true, StructField: "ID"},
-			{StructField: "Email"},
-			{StructField: "Name"},
-			{StructField: "Created"},
-			{StructField: "Updated"},
-			{StructField: "PasswordDigest", Name: "password_digest"},
-		},
-		Relations: []Relation{
-			{
-				StructField:  "Articles",
-				Type:         OneToMany,
-				TargetEntity: "Article",
-				IndexBy:      "AuthorID",
-				MappedBy:     "Author",
-				Fetch:        Eager,
-			},
-		},
-	}
-}
-
-func (user *User) BeforeCreate() (err error) {
-	user.Created = time.Now()
-	user.Updated = time.Now()
-	return
-}
-
-func (user *User) BeforeUpdate() (err error) {
-	user.Updated = time.Now()
-	return
-}
-
-// BeforeSave does some work before saving
-// see http://stackoverflow.com/questions/23259586/bcrypt-password-hashing-in-golang-compatible-with-node-js
-func (user *User) GenerateSecurePassword(password string) error {
-	passwordDigest, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	user.PasswordDigest = string(passwordDigest)
-	return nil
-}
-
-// Authenticate return an error if the password and PasswordDigest do not match
-func (user User) Authenticate(password string) error {
-	return bcrypt.CompareHashAndPassword([]byte(user.PasswordDigest), []byte(password))
-}
-
-// NotEntity is not a valid entity
-type NotEntity struct{}
 
 func GetUserFixture() []*User {
 	return []*User{
@@ -327,5 +267,5 @@ func GetConnection(t *testing.T) *Connection {
 		t.Fatal(err)
 	}
 
-	return NewConnectionWithOptions("sqlite3", db, &ConnectionOptions{Logger: t})
+	return NewConnectionWithOptions("sqlite3", db, &ConnectionOptions{})
 }

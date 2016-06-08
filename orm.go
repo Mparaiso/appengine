@@ -19,6 +19,14 @@ func (orm ORM) GetTypeMetadata(Type reflect.Type) Metadata {
 	return orm.metadatas[Type]
 }
 
+func (orm ORM) GetValueMetadata(value reflect.Value) Metadata {
+	return orm.GetTypeMetadata(value.Type())
+}
+
+func (orm ORM) GetEntityMetadata(entity Entity) Metadata {
+	return orm.GetTypeMetadata(reflect.TypeOf(entity))
+}
+
 func (orm ORM) HasTypeMetadata(Type reflect.Type) bool {
 	_, ok := orm.metadatas[Type]
 	return ok
@@ -34,7 +42,7 @@ func (orm ORM) HasEntityMetadata(entity Entity) bool {
 func (orm ORM) Register(entities ...interface{}) error {
 	for _, entity := range entities {
 		if e, ok := entity.(MetadataProvider); ok {
-			orm.metadatas[reflect.TypeOf(entity)] = e.DataMapperMetaData()
+			orm.metadatas[reflect.TypeOf(entity)] = e.ProvideMetadata()
 		} else {
 			return fmt.Errorf("Cannot create metadata from Entity %#v .", entity)
 		}
@@ -78,7 +86,10 @@ func (orm *ORM) UnityOfWork() *UnityOfWork {
 	return orm.unityOfWork
 }
 
-func (orm *ORM) Persist(entities ...Entity) {
+// Persist inserts or updates an entity depending on
+// the value of its primary key. If the primary key equals
+// 0, a new entity will be inserted
+func (orm *ORM) Persist(entities ...Entity) *ORM {
 
 	for _, entity := range entities {
 
@@ -87,12 +98,43 @@ func (orm *ORM) Persist(entities ...Entity) {
 		} else {
 			orm.UnityOfWork().Update(entity)
 		}
+		metadata := orm.GetEntityMetadata(entity)
+		for _, relation := range metadata.Relations {
+			if (relation.Cascade & Persist) != 0 {
+				if relation.Type == OneToMany {
+					entityValue := reflect.Indirect(reflect.ValueOf(entity))
+					collectionValue := entityValue.FieldByName(relation.StructField)
+					for i := 0; i < collectionValue.Len(); i++ {
+						if entity,ok:=collectionValue.Index(i).Interface().(Entity);ok{
+						orm.Persist(entity)
+						}
+					}
+				}
+			}
+		}
+
 	}
+	return orm
 }
 
-func (orm *ORM) Destroy(entities ...Entity) {
+func (orm *ORM) Remove(entities ...Entity) {
 	for _, entity := range entities {
-		orm.UnityOfWork().Delete(entity)
+		orm.UnityOfWork().Remove(entity)
+	}
+	metadata:=orm.GetEntityMetadata(entity)
+	for _,relation:=range metadata.Relations{
+		if(relation.Cascade & Remove )!=0{
+			if relation.Type == OneToMany{
+				entityValue := reflect.Indirect(reflect.ValueOf(entity))
+				collectionValue:=entityValue.FieldByName(relation.StructField)
+				for i:=0;i<collectionValue.Len();i++{
+					if entity,ok:=collectionValue.Index(i).Interface().(Entity);ok{
+						orm.Remove(entity)
+					}
+					
+				}
+			}
+		}
 	}
 
 }
