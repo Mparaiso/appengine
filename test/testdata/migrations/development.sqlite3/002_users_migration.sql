@@ -4,7 +4,8 @@ CREATE TABLE users(
     name VARCHAR(255) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     created TIMESTAMP DEFAULT( DATETIME('now') ), 
-    updated TIMESTAMP DEFAULT( DATETIME('now') )
+    updated TIMESTAMP DEFAULT( DATETIME('now') ),
+    user_infos_id INTEGER
 );
 
 -- +migrate Down

@@ -53,6 +53,8 @@ type User struct {
 	Updated        time.Time
 	PasswordDigest string
 	Articles       []*Article
+	UserInfoID     int64
+	UserInfo       *UserInfo
 }
 
 func (User) ProvideMetadata() Metadata {
@@ -66,6 +68,7 @@ func (User) ProvideMetadata() Metadata {
 			{StructField: "Created"},
 			{StructField: "Updated"},
 			{StructField: "PasswordDigest", Name: "password_digest"},
+			{StructField: "UserInfoID", Name: "user_infos_id"},
 		},
 		Relations: []Relation{
 			{
@@ -77,6 +80,12 @@ func (User) ProvideMetadata() Metadata {
 				Fetch:        Eager,
 				Cascade:      Persist | Remove,
 			},
+			/*{
+				StructField:  "UserInfo",
+				Type:         OneToOne,
+				TargetEntity: "UserInfo",
+				JoinColumn:   JoinColumn{StructField: "UserInfoID", ReferencedStructField: "ID"},
+			},*/
 		},
 	}
 }
@@ -116,6 +125,35 @@ func (user *User) GenerateSecurePassword(password string) error {
 // Authenticate return an error if the password and PasswordDigest do not match
 func (user User) Authenticate(password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(user.PasswordDigest), []byte(password))
+}
+
+type UserInfo struct {
+	ID            int64
+	UserID        int64
+	User          *User
+	NiceName      string
+	Url           string
+	Registered    time.Time
+	ActivationKey string
+	Status        int
+	DisplayName   string
+}
+
+func (UserInfo) ProvideMetadata() Metadata {
+	return Metadata{
+		Entity: "UserInfo",
+		Table:  Table{Name: "user_infos"},
+		Columns: []Column{
+			{StructField: "ID", ID: true, Name: "id"},
+			{StructField: "UserID", Name: "user_id"},
+			{StructField: "NiceName", Name: "nicename"},
+			{StructField: "Url", Name: "url"},
+			{StructField: "Registered", Name: "registered"},
+			{StructField: "ActivationKey", Name: "activation_key"},
+			{StructField: "Status", Name: "status"},
+			{StructField: "DisplayName", Name: "display_name"},
+		},
+	}
 }
 
 // NotEntity is not a valid entity

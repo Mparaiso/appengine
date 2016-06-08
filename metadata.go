@@ -45,6 +45,13 @@ type Column struct {
 	Name        string
 }
 
+type JoinColumn struct {
+	// The referenced id of the owning entity
+	ReferencedStructField string
+	// the foreign key of the owned entity
+	StructField string
+}
+
 // Relation Represents a relation between 2 entities
 type Relation struct {
 	// The Type of relation
@@ -60,6 +67,8 @@ type Relation struct {
 	// The field where to load the related entities
 	// if needed.
 	StructField string
+	// For a OneToOne relationship
+	JoinColumn JoinColumn
 }
 
 // DataMapperMetadata represent metadatas for a DB Table

@@ -92,49 +92,56 @@ func (orm *ORM) UnityOfWork() *UnityOfWork {
 func (orm *ORM) Persist(entities ...Entity) *ORM {
 
 	for _, entity := range entities {
-
 		if orm.resolveId(entity).(int64) == 0 {
 			orm.UnityOfWork().Create(entity)
 		} else {
 			orm.UnityOfWork().Update(entity)
 		}
+
 		metadata := orm.GetEntityMetadata(entity)
+
 		for _, relation := range metadata.Relations {
+
 			if (relation.Cascade & Persist) != 0 {
+
 				if relation.Type == OneToMany {
 					entityValue := reflect.Indirect(reflect.ValueOf(entity))
 					collectionValue := entityValue.FieldByName(relation.StructField)
+
 					for i := 0; i < collectionValue.Len(); i++ {
-						if entity,ok:=collectionValue.Index(i).Interface().(Entity);ok{
-						orm.Persist(entity)
+						if e, ok := collectionValue.Index(i).Interface().(Entity); ok {
+							orm.Persist(e)
 						}
 					}
 				}
 			}
 		}
-
 	}
 	return orm
 }
 
 func (orm *ORM) Remove(entities ...Entity) {
 	for _, entity := range entities {
-		orm.UnityOfWork().Remove(entity)
-	}
-	metadata:=orm.GetEntityMetadata(entity)
-	for _,relation:=range metadata.Relations{
-		if(relation.Cascade & Remove )!=0{
-			if relation.Type == OneToMany{
-				entityValue := reflect.Indirect(reflect.ValueOf(entity))
-				collectionValue:=entityValue.FieldByName(relation.StructField)
-				for i:=0;i<collectionValue.Len();i++{
-					if entity,ok:=collectionValue.Index(i).Interface().(Entity);ok{
-						orm.Remove(entity)
+		metadata := orm.GetEntityMetadata(entity)
+		for _, relation := range metadata.Relations {
+			// Cascade remove.
+			// The owned entities are removed BEFORE the owning entity
+			// to prevent constraint violations like referencial integrity errors
+
+			if (relation.Cascade & Remove) != 0 {
+				if relation.Type == OneToMany {
+					entityValue := reflect.Indirect(reflect.ValueOf(entity))
+					collectionValue := entityValue.FieldByName(relation.StructField)
+					for i := 0; i < collectionValue.Len(); i++ {
+						if e, ok := collectionValue.Index(i).Interface().(Entity); ok {
+							orm.Remove(e)
+						}
+
 					}
-					
 				}
 			}
 		}
+		orm.UnityOfWork().Remove(entity)
 	}
 
 }

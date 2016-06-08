@@ -5,28 +5,75 @@ import (
 	"reflect"
 )
 
+// UnityOfWork is a unity of work.
+// Please use NewUnityOfWork to create
+// a one, and not the struct directly
 type UnityOfWork struct {
 	deleted []MetadataProvider
 	updated []MetadataProvider
 	created []MetadataProvider
 }
 
+// NewUnityOfWork returns a new UnityOfWork
 func NewUnityOfWork() *UnityOfWork {
 	return &UnityOfWork{[]MetadataProvider{}, []MetadataProvider{}, []MetadataProvider{}}
 }
 
+// Create add an entity to the create list
 func (u *UnityOfWork) Create(entities ...MetadataProvider) {
+	// This will guarantee that no entity
+	// exists in the unity of work twice
+	for _, entity := range entities {
+		u.Detach(entity)
+	}
 	u.created = append(u.created, entities...)
 }
 
+// Update adds an entity to the update list
 func (u *UnityOfWork) Update(entities ...MetadataProvider) {
+	// This will guarantee that no entity
+	// exists in the unity of work twice
+	for _, entity := range entities {
+		u.Detach(entity)
+	}
 	u.updated = append(u.updated, entities...)
 }
 
+// Remove adds an entity to the delete list
 func (u *UnityOfWork) Remove(entities ...MetadataProvider) {
+	// This will guarantee that no entity
+	// exists in the unity of work twice
+	for _, entity := range entities {
+		u.Detach(entity)
+	}
 	u.deleted = append(u.deleted, entities...)
 }
 
+// Detach remove entities from the unity of work
+func (u *UnityOfWork) Detach(entity MetadataProvider) {
+	for i, candidate := range u.deleted {
+		if candidate == entity {
+			u.deleted = append(u.deleted[:i], u.deleted[i+1:]...)
+			return
+		}
+	}
+	for i, candidate := range u.updated {
+		if candidate == entity {
+			u.deleted = append(u.updated[:i], u.updated[i+1:]...)
+			return
+		}
+	}
+	for i, candidate := range u.created {
+		if candidate == entity {
+			u.deleted = append(u.created[:i], u.created[i+1:]...)
+			return
+		}
+	}
+}
+
+// Flush execute all operations in a single transaction
+// then reset the unity of work.
+// Returns an error if needed
 func (u *UnityOfWork) Flush(dm *ORM) error {
 	// See http://stackoverflow.com/questions/24318389/golang-elem-vs-indirect-in-the-reflect-package
 
