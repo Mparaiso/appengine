@@ -154,14 +154,22 @@ func TestORMDestroy(t *testing.T) {
 	}
 }
 */
-func TestRegressionBug(t *testingT) {
+func TestRegressionBug(t *testing.T) {
+	user := new(User)
 	orm := NewORM(GetConnection(t))
-	err := orm.Register(new(Article), new(User), new(UserInfo))
-	userRepository, err := orm.GetRepository(new(User))
-	query := Query{}
+	err := orm.Register(new(Article), user, new(UserInfo))
+	userRepository, err := orm.GetRepository(user)
+	query, values, err := Query{
+		Set:  user.ProvideMetadata().BuildFieldValueMap(user),
+		Type: INSERT,
+	}.BuildQuery(userRepository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(query, values)
 }
 func TestRegressionBug2(t *testing.T) {
-	t.Skip()
+
 	orm := NewORM(GetConnection(t))
 	err := orm.Register(new(Article), new(User), new(UserInfo))
 	if err != nil {
