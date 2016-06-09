@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"strings"
 )
+
 // Order is an order
 type Order string
 
 const (
 	// ASC in an ORDER BY statement
-	ASC  Order = "ASC"
+	ASC Order = "ASC"
 	// DESC in an ORDER BY statement
 	DESC Order = "DESC"
 )
