@@ -102,7 +102,6 @@ func (user *User) AddArticles(articles ...*Article) {
 	}
 }
 
-// BeforeSave does some work before saving
 // see http://stackoverflow.com/questions/23259586/bcrypt-password-hashing-in-golang-compatible-with-node-js
 func (user *User) GenerateSecurePassword(password string) error {
 	passwordDigest, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -116,6 +115,35 @@ func (user *User) GenerateSecurePassword(password string) error {
 // Authenticate return an error if the password and PasswordDigest do not match
 func (user User) Authenticate(password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(user.PasswordDigest), []byte(password))
+}
+
+// UserInfo complements the user entity
+type UserInfo struct {
+	ID            int64
+	NiceName      string
+	URL           string
+	Registered    time.Time
+	ActivationKey string
+	Status        int8
+	DisplayName   string
+	UserID        int64
+	User          *User
+}
+
+func (UserInfo) ProvideMetadata() Metadata {
+	return Metadata{
+		Table:  Table{Name: "user_infos"},
+		Entity: "UserInfo",
+		Columns: []Column{
+			{StructField: "ID", ID: true},
+			{StructField: "NiceName"},
+			{StructField: "Registered"},
+			{StructField: "ActivationKey", Name: "activation_key"},
+			{StructField: "Status"},
+			{StructField: "DisplayName", Name: "display_name"},
+			{StructField: "UserID", Name: "user_id"},
+		},
+	}
 }
 
 // NotEntity is not a valid entity
