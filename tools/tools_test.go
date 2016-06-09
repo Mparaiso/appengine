@@ -2,6 +2,8 @@ package tools_test
 
 import (
 	"database/sql"
+	"time"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mparaiso/go-orm/tools"
 	"github.com/rubenv/sql-migrate"
@@ -12,24 +14,50 @@ import (
 )
 
 type User struct {
-	Name  string
-	Email string
+	Name             string
+	Email            string
+	Created, Updated time.Time
 	*UserInfo
 }
 type UserInfo struct {
 	Url string
 }
 
-func Test(t *testing.T) {
-	t.Log("test")
+func TestMapRowsToSliceOfStruct(t *testing.T) {
 	db := GetConnection(t)
-	user := &User{"John Doe", "john.doe@acme.com", nil}
+	users := []*User{
+		{Name: "John Doe", Email: "john.doe@acme.com"},
+		{Name: "Jane Doe", Email: "jane.doe@acme.com"},
+	}
+	for _, user := range users {
+		_, err := db.Exec("INSERT INTO users(name,email) values(?,?)", user.Name, user.Email)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	result := []*User{}
+	rows, err := db.Query("SELECT name as Name,email as Email,created as Created from users ORDER BY users.id ;")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tools.MapRowsToSliceOfStruct(rows, &result, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := len(result); l != 2 {
+		t.Fatalf("Result length should be 2, got %d", l)
+	}
+}
+
+func TestMapRowToStruct(t *testing.T) {
+	db := GetConnection(t)
+	user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
 	_, err := db.Exec("INSERT INTO users(name,email) values(?,?)", user.Name, user.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rows, err := db.Query("SELECT name as Name, email as Email from users")
+	rows, err := db.Query("SELECT name as Name, email as Email, created as Created from users")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +69,7 @@ func Test(t *testing.T) {
 	users := []*User{}
 	for rows.Next() {
 		user := new(User)
-		err = tools.MapRowToStruct(columns, rows, user)
+		err = tools.MapRowToStruct(columns, rows, user, true)
 		if err != nil {
 			t.Fatal(err)
 		}

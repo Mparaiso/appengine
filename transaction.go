@@ -2,12 +2,10 @@ package orm
 
 import (
 	"database/sql"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type Transaction struct {
-	*sqlx.Tx
+	*sql.Tx
 	Logger Logger
 }
 
