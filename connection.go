@@ -41,20 +41,20 @@ func (connection *Connection) DB() *sql.DB {
 // Exec will execute a query like INSERT,UPDATE,DELETE.
 func (connection *Connection) Exec(query string, parameters ...interface{}) (sql.Result, error) {
 	defer connection.log(append([]interface{}{query}, parameters...)...)
-	return connection.db.Unsafe().Exec(query, parameters...)
+	return connection.db.Exec(query, parameters...)
 }
 
 // Select with fetch multiple records.
 func (connection *Connection) Select(records interface{}, query string, parameters ...interface{}) error {
 	defer connection.log(append([]interface{}{query}, parameters...)...)
-	return connection.db.Unsafe().Select(records, query, parameters...)
+	return connection.db.Select(records, query, parameters...)
 
 }
 
 // Get will fetch a single record.
 func (connection *Connection) Get(record interface{}, query string, parameters ...interface{}) error {
 	defer connection.log(append([]interface{}{query}, parameters...)...)
-	return connection.db.Unsafe().Get(record, query, parameters...)
+	return connection.db.Get(record, query, parameters...)
 }
 
 func (connection *Connection) log(messages ...interface{}) {

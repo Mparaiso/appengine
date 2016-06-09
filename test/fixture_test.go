@@ -53,6 +53,7 @@ type User struct {
 	Updated        time.Time
 	PasswordDigest string
 	Articles       []*Article
+	*UserInfo
 }
 
 func (User) ProvideMetadata() Metadata {

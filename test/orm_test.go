@@ -10,6 +10,7 @@ import (
 	"github.com/rubenv/sql-migrate"
 )
 
+/*
 func TestORMPersist(t *testing.T) {
 	orm := NewORM(GetConnection(t))
 	err := orm.Register(new(User), new(Article))
@@ -150,6 +151,37 @@ func TestORMDestroy(t *testing.T) {
 	articleRepository.FindBy(Query{Where: []string{"AuthorID", "=", "?"}, Params: array{userID}}, &result)
 	if l := len(result); l != 0 {
 		t.Fatalf("Length should be 0, got %d", l)
+	}
+}
+*/
+func TestRegressionBug(t *testingT) {
+	orm := NewORM(GetConnection(t))
+	err := orm.Register(new(Article), new(User), new(UserInfo))
+	userRepository, err := orm.GetRepository(new(User))
+	query := Query{}
+}
+func TestRegressionBug2(t *testing.T) {
+	t.Skip()
+	orm := NewORM(GetConnection(t))
+	err := orm.Register(new(Article), new(User), new(UserInfo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	userFixtures := GetUserFixture()
+	user := userFixtures[0]
+	orm.Persist(user)
+	err = orm.Flush()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetchedUser := new(User)
+	userRepository, err := orm.GetRepository(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = userRepository.Find(user.ID, fetchedUser)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
