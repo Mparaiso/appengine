@@ -34,7 +34,7 @@ func NewRepository(Type reflect.Type, datamapper *ORM) *Repository {
 	if idField == "" {
 		idField = metadata.FindIdColumn().StructField
 	}
-	return &Repository{datamapper.GetConnection(), idField, metadata.Table.Name, Type, datamapper}
+	return &Repository{datamapper.Connection(), idField, metadata.Table.Name, Type, datamapper}
 }
 
 // All finds all
@@ -44,7 +44,7 @@ func (repository *Repository) All(collection Collection) error {
 
 // Find finds an entity by id
 func (repository *Repository) Find(id Any, entity Entity) error {
-	return repository.FindOneBy(Query{Where: []string{repository.IDField, "=", "?"}, Params: []interface{}{id}}, entity)
+	return repository.FindOneBy(Query{Where: []string{repository.IDField, "=", "?"}, Params: []interface{}{id}, Limit: 1}, entity)
 }
 
 // FindOneBy finds one entity filtered by a query and resolve s
@@ -120,7 +120,9 @@ func (repository *Repository) doFindBy(query QueryBuilder, collection Collection
 	if err != nil {
 		return err
 	}
-	return repository.Connection.Select(collection, queryString, values...)
+	err = repository.Connection.Select(collection, queryString, values...)
+
+	return err
 }
 
 // doFindOneBy doesn't resolve relations between entities
@@ -204,6 +206,7 @@ func (repository *Repository) resolveOneToMany(relation Relation, collection int
 }
 
 func (repository *Repository) resolveOneToManySingle(relation Relation, entity Entity) error {
+
 	if relation.Fetch == Eager {
 		if relation.Type == OneToMany {
 			targetRepository, err := repository.ORM.GetRepositoryByEntityName(relation.TargetEntity)

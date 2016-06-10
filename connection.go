@@ -56,7 +56,9 @@ func (connection *Connection) Select(records interface{}, query string, paramete
 	if err != nil {
 		return err
 	}
-	return tools.MapRowsToSliceOfStruct(rows, records, true)
+	err = tools.MapRowsToSliceOfStruct(rows, records, true)
+
+	return err
 }
 
 // Get will fetch a single record.
@@ -70,13 +72,12 @@ func (connection *Connection) Get(record interface{}, query string, parameters .
 	// pass a pointer to that slice to connection.Select
 	// if the slice's length == 1 , put back the first value of that
 	// slice in the record value.
-	defer connection.log(append([]interface{}{query}, parameters...)...)
 	if reflect.TypeOf(record).Kind() != reflect.Ptr {
 		return NotAPointerError(fmt.Sprintf("Expecting a pointer, got %#v", record))
 	}
 	recordValue := reflect.ValueOf(record)
 	recordType := recordValue.Type()
-	sliceOfRecords := reflect.MakeSlice(reflect.SliceOf(recordType), 0, 0)
+	sliceOfRecords := reflect.MakeSlice(reflect.SliceOf(recordType), 0, 1)
 	pointerOfSliceOfRecords := reflect.New(sliceOfRecords.Type())
 	pointerOfSliceOfRecords.Elem().Set(sliceOfRecords)
 	//
@@ -84,7 +85,7 @@ func (connection *Connection) Get(record interface{}, query string, parameters .
 	if err != nil {
 		return err
 	}
-	if pointerOfSliceOfRecords.Elem().Len() == 1 {
+	if pointerOfSliceOfRecords.Elem().Len() >= 1 {
 		recordValue.Elem().Set(reflect.Indirect(pointerOfSliceOfRecords).Index(0).Elem())
 	} else {
 		return sql.ErrNoRows

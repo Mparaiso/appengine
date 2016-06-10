@@ -94,7 +94,7 @@ func GetConnection(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	migrations := &migrate.FileMigrationSource{
-		Dir: "./../test/testdata/migrations/development.sqlite3",
+		Dir: "./../testdata/migrations/development.sqlite3",
 	}
 	_, err = migrate.Exec(db, "sqlite3", migrations, migrate.Up)
 	if err != nil {

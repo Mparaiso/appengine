@@ -24,7 +24,7 @@ func TestConnectionGet(t *testing.T) {
 		t.Fatal(err)
 	}
 	user := new(AppUser)
-	err = connection.Get(user, "SELECT name as Name,email as Email from users LIMIT 1;")
+	err = connection.Get(user, "SELECT name as Name,email as Email from users ;")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestConnectionSelect(t *testing.T) {
 	} else if r != 2 {
 		t.Fatalf("2 records should have been created, got %d", r)
 	} else {
-		t.Log(result.LastInsertId())
+		//t.Log(result.LastInsertId())
 	}
 
 	// test query
@@ -60,7 +60,7 @@ func TestConnectionSelect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	} else {
-		t.Logf("%#v", users)
+		//t.Logf("%#v", users)
 	}
 	if expected, name := "john doe", users[0].Name; name != expected {
 		t.Fatalf("users[0].Name should be '%s', got '%s'", expected, name)

@@ -262,9 +262,9 @@ func buildSelectFieldListFromColumnMetadata(metadata Metadata, fieldNameSelector
 		}
 		if (len(fieldNameSelector) > 0 && indexOfString(fieldNameSelector, column.StructField) >= 0) || len(fieldNameSelector) == 0 {
 			if column.Name == "" {
-				fields = fields + metadata.Table.Name + "." + strings.ToLower(column.StructField) + " AS " + strings.ToLower(column.StructField) + ","
+				fields = fields + metadata.Table.Name + "." + strings.ToLower(column.StructField) + " AS " + column.StructField + ","
 			} else {
-				fields = fields + metadata.Table.Name + "." + column.Name + " AS " + strings.ToLower(column.StructField) + ","
+				fields = fields + metadata.Table.Name + "." + column.Name + " AS " + column.StructField + ","
 			}
 		}
 	}

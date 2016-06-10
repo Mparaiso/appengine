@@ -43,6 +43,5 @@ func MapRowToStruct(columns []string, scanner Scanner, Struct interface{}, ignor
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

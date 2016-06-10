@@ -41,6 +41,7 @@ func MapRowsToSliceOfStruct(scanner RowsScanner, sliceOfStructs interface{}, ign
 			t = recordsValue.Type().Elem()
 		}
 		pointerOfElement := reflect.New(t)
+
 		err = MapRowToStruct(columns, scanner, pointerOfElement.Interface(), ignoreMissingField)
 		if err != nil {
 			return err

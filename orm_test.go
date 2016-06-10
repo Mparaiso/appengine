@@ -32,79 +32,6 @@ func TestORMPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ThenTestRepositoryFind(orm, t, user.ID)
-}
-
-func ThenTestRepositoryFind(orm *ORM, t *testing.T, userID int64) {
-	userRepository, err := orm.GetRepository(new(User))
-	if err != nil {
-		t.Fatal(err)
-	}
-	user := new(User)
-	err = userRepository.Find(userID, user)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if l := len(user.Articles); l != 2 {
-		t.Fatalf("Articles length should be 2, got %d", l)
-	}
-}
-
-func TestRepositoryFindBy(t *testing.T) {
-	user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
-	articles := []*Article{{Title: "First Article"}, {Title: "Second Article"}}
-	orm := NewORM(GetConnection(t))
-	orm.Register(new(User), new(Article))
-	err := orm.Persist(user).Flush()
-	if err != nil {
-		t.Fatal(err)
-	}
-	user.AddArticles(articles...)
-	err = orm.Persist(user).Flush()
-	if err != nil {
-		t.Fatal(err)
-	}
-	userRepository, err := orm.GetRepository(user)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := []*User{}
-	err = userRepository.FindBy(Query{Where: []string{"ID", "=", "?"}, Params: []interface{}{user.ID}}, &result)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if l := len(user.Articles); l != 2 {
-		t.Fatalf("length should b 2, got %d", l)
-	}
-	ThenTestRepositoryAll(orm, t)
-}
-
-func ThenTestRepositoryAll(orm *ORM, t *testing.T) {
-	userRepository, err := orm.GetRepository(new(User))
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := []*User{}
-	err = userRepository.All(&result)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if l := len(result); l != 1 {
-		t.Fatalf("Len Should be 1, got %d", l)
-	}
-
-	ThenTestRepositoryFindOneBy(userRepository, t, result[0])
-}
-
-func ThenTestRepositoryFindOneBy(repository *Repository, t *testing.T, user *User) {
-	result := new(User)
-	err := repository.FindOneBy(Query{Where: []string{"ID", "=", "?"}, Params: []interface{}{user.ID}}, result)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id := result.ID; id != user.ID {
-		t.Fatalf("The ID of the user should be %d, got %d", user.ID, result.ID)
-	}
 
 }
 
@@ -157,6 +84,7 @@ func TestORMDestroy(t *testing.T) {
 }
 
 func TestRegressionBug(t *testing.T) {
+
 	user := new(User)
 	orm := NewORM(GetConnection(t))
 	err := orm.Register(new(Article), user, new(UserInfo))
@@ -170,6 +98,7 @@ func TestRegressionBug(t *testing.T) {
 	}
 	t.Log(query, values)
 }
+
 func TestRegressionBug2(t *testing.T) {
 
 	orm := NewORM(GetConnection(t))

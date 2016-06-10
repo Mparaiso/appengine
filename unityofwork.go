@@ -74,15 +74,20 @@ func (u *UnityOfWork) Detach(entity MetadataProvider) {
 // Flush execute all operations in a single transaction
 // then reset the unity of work.
 // Returns an error if needed
-func (u *UnityOfWork) Flush(dm *ORM) error {
+func (u *UnityOfWork) Flush(orm *ORM) error {
 	// See http://stackoverflow.com/questions/24318389/golang-elem-vs-indirect-in-the-reflect-package
 
-	transaction, err := dm.Connection.BeginTransaction()
+	transaction, err := orm.connection.BeginTransaction()
 	if err != nil {
 		return err
 	}
 	// Create entities
 	for _, entity := range u.created {
+		repository, err := orm.GetRepository(entity)
+		if err != nil {
+			transaction.Rollback()
+			return err
+		}
 		if e, ok := interface{}(entity).(BeforeCreateListener); ok == true {
 			if err := e.BeforeCreate(); err != nil {
 				transaction.Rollback()
@@ -91,16 +96,12 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 		}
 		values := []interface{}{}
 		Type := reflect.TypeOf(entity)
-		metadata := dm.metadatas[Type]
+		metadata := orm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		repository, err := dm.GetRepository(entity)
-		if err != nil {
-			transaction.Rollback()
-			return err
-		}
+
 		Set := metadata.BuildFieldValueMap(entity)
 		query, values, err := Query{Type: INSERT, Set: Set}.BuildQuery(repository)
 		if err != nil {
@@ -121,6 +122,11 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 	}
 	// Update entities
 	for _, entity := range u.updated {
+		repository, err := orm.GetRepository(entity)
+		if err != nil {
+			transaction.Rollback()
+			return err
+		}
 		if e, ok := interface{}(entity).(BeforeUpdateListener); ok == true {
 			if err := e.BeforeUpdate(); err != nil {
 				transaction.Rollback()
@@ -129,7 +135,7 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 		}
 		values := []interface{}{}
 		Type := reflect.TypeOf(entity)
-		metadata := dm.metadatas[Type]
+		metadata := orm.metadatas[Type]
 		if &metadata == nil {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
@@ -138,11 +144,7 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 		IDField := metadata.FindIdColumn().StructField
 		entityValue := reflect.Indirect(reflect.ValueOf(entity))
 		ID := entityValue.FieldByName(IDField).Interface()
-		repository, err := dm.GetRepository(entity)
-		if err != nil {
-			transaction.Rollback()
-			return err
-		}
+		delete(Set, IDField)
 		query, values, err := Query{
 			Type:   UPDATE,
 			Set:    Set,
@@ -164,17 +166,17 @@ func (u *UnityOfWork) Flush(dm *ORM) error {
 	// Delete entities
 	for _, entity := range u.deleted {
 		Type := reflect.TypeOf(entity)
-
-		metadata := dm.metadatas[Type]
-		if &metadata == nil {
-			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
-		}
-		repository, err := dm.GetRepository(entity)
+		repository, err := orm.GetRepository(entity)
 		if err != nil {
 			transaction.Rollback()
 			return err
 		}
+		metadata := orm.metadatas[Type]
+		if &metadata == nil {
+			transaction.RollBack()
+			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
+		}
+
 		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
 		id := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().StructField).Interface()
 		query, values, err := Query{Type: DELETE,
