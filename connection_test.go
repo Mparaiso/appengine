@@ -9,12 +9,12 @@ import (
 	"github.com/rubenv/sql-migrate"
 )
 
-type User struct {
+type AppUser struct {
 	Name, Email string
-	*UserInfo
+	*UserInfos
 }
 
-type UserInfo struct {
+type UserInfos struct {
 }
 
 func TestConnectionGet(t *testing.T) {
@@ -23,7 +23,7 @@ func TestConnectionGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := new(User)
+	user := new(AppUser)
 	err = connection.Get(user, "SELECT name as Name,email as Email from users LIMIT 1;")
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestConnectionGet(t *testing.T) {
 	if expected, actual := "John Doe", user.Name; expected != actual {
 		t.Fatalf("Expected '%s', got '%s'", expected, actual)
 	}
-	notAPointerUser := User{}
+	notAPointerUser := AppUser{}
 	err = connection.Get(notAPointerUser, "SELECT * from users ;")
 
 	if e, ok := err.(orm.NotAPointerError); !ok {
@@ -55,7 +55,7 @@ func TestConnectionSelect(t *testing.T) {
 	}
 
 	// test query
-	users := []*User{}
+	users := []*AppUser{}
 	err = connection.Select(&users, "SELECT users.name as Name, users.email as Email from users ORDER BY users.id ASC ;")
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestConnectionSelect(t *testing.T) {
 }
 
 func LoadFixtures(connection *orm.Connection) error {
-	for _, user := range []User{
+	for _, user := range []AppUser{
 		{Name: "John Doe", Email: "john.doe@acme.com"},
 		{Name: "Jane Doe", Email: "jane.doe@acme.com"},
 		{Name: "Jack Doe", Email: "jack.doe@acme.com"},
@@ -87,7 +87,7 @@ func GetDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	migrations := &migrate.FileMigrationSource{
-		Dir: "./test/testdata/migrations/development.sqlite3",
+		Dir: "./testdata/migrations/development.sqlite3",
 	}
 	_, err = migrate.Exec(db, "sqlite3", migrations, migrate.Up)
 	if err != nil {
