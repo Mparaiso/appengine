@@ -2,6 +2,7 @@ package orm
 
 import (
 	"database/sql"
+	"fmt"
 
 	"reflect"
 
@@ -59,11 +60,23 @@ func (connection *Connection) Select(records interface{}, query string, paramete
 }
 
 // Get will fetch a single record.
+// expects record to be a pointer to a struct
+// Exemple:
+//    user := new(User)
+//    err := connection.get(user,"SELECT * from users WHERE users.id = ?",1)
+//
 func (connection *Connection) Get(record interface{}, query string, parameters ...interface{}) error {
+	// make a slice from the record type
+	// pass a pointer to that slice to connection.Select
+	// if the slice's length == 1 , put back the first value of that
+	// slice in the record value.
 	defer connection.log(append([]interface{}{query}, parameters...)...)
+	if reflect.TypeOf(record).Kind() != reflect.Ptr {
+		return NotAPointerError(fmt.Sprintf("Expecting a pointer, got %#v", record))
+	}
 	recordValue := reflect.ValueOf(record)
 	recordType := recordValue.Type()
-	sliceOfRecords := reflect.MakeSlice(recordType, 0, 0)
+	sliceOfRecords := reflect.MakeSlice(reflect.SliceOf(recordType), 0, 0)
 	pointerOfSliceOfRecords := reflect.New(sliceOfRecords.Type())
 	pointerOfSliceOfRecords.Elem().Set(sliceOfRecords)
 	//
@@ -71,8 +84,8 @@ func (connection *Connection) Get(record interface{}, query string, parameters .
 	if err != nil {
 		return err
 	}
-	if sliceOfRecords.Len() == 1 {
-		recordValue.Set(sliceOfRecords.Index(0))
+	if pointerOfSliceOfRecords.Elem().Len() == 1 {
+		recordValue.Elem().Set(reflect.Indirect(pointerOfSliceOfRecords).Index(0).Elem())
 	} else {
 		return sql.ErrNoRows
 	}

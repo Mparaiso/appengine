@@ -11,9 +11,36 @@ import (
 
 type User struct {
 	Name, Email string
+	*UserInfo
 }
 
-func TestConnection(t *testing.T) {
+type UserInfo struct {
+}
+
+func TestConnectionGet(t *testing.T) {
+	connection := orm.NewConnection("sqlite3", GetDB(t))
+	err := LoadFixtures(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := new(User)
+	err = connection.Get(user, "SELECT name as Name,email as Email from users LIMIT 1;")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected, actual := "John Doe", user.Name; expected != actual {
+		t.Fatalf("Expected '%s', got '%s'", expected, actual)
+	}
+	notAPointerUser := User{}
+	err = connection.Get(notAPointerUser, "SELECT * from users ;")
+
+	if e, ok := err.(orm.NotAPointerError); !ok {
+		t.Fatalf("Error should be orm.NotAPointerError when passing non-pointer to connection.Get, got %#v", e)
+	}
+
+}
+
+func TestConnectionSelect(t *testing.T) {
 	connection := orm.NewConnection("sqlite3", GetDB(t))
 	result, err := connection.Exec("INSERT INTO users(name,email) values('john doe','johndoe@acme.com'),('jane doe','jane.doe@acme.com');")
 	if err != nil {
@@ -38,6 +65,20 @@ func TestConnection(t *testing.T) {
 	if expected, name := "john doe", users[0].Name; name != expected {
 		t.Fatalf("users[0].Name should be '%s', got '%s'", expected, name)
 	}
+}
+
+func LoadFixtures(connection *orm.Connection) error {
+	for _, user := range []User{
+		{Name: "John Doe", Email: "john.doe@acme.com"},
+		{Name: "Jane Doe", Email: "jane.doe@acme.com"},
+		{Name: "Jack Doe", Email: "jack.doe@acme.com"},
+	} {
+		_, err := connection.Exec("INSERT INTO users(name,email) values(?,?);", user.Name, user.Email)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func GetDB(t *testing.T) *sql.DB {

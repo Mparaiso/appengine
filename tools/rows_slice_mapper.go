@@ -31,8 +31,16 @@ func MapRowsToSliceOfStruct(scanner RowsScanner, sliceOfStructs interface{}, ign
 	// get the underlying type of a slice
 	// @see http://stackoverflow.com/questions/24366895/golang-reflect-slice-underlying-type
 	for scanner.Next() {
-		// get the
-		pointerOfElement := reflect.New(recordsValue.Type().Elem().Elem())
+		//
+		var t reflect.Type
+		if recordsValue.Type().Elem().Kind() == reflect.Ptr {
+			// the sliceOfStructs type is like []*T
+			t = recordsValue.Type().Elem().Elem()
+		} else {
+			// the sliceOfStructs type is like []T
+			t = recordsValue.Type().Elem()
+		}
+		pointerOfElement := reflect.New(t)
 		err = MapRowToStruct(columns, scanner, pointerOfElement.Interface(), ignoreMissingField)
 		if err != nil {
 			return err
