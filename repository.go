@@ -1,19 +1,11 @@
 package orm
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"reflect"
 )
-
-// UserRepository is a repository of users
-type Repository struct {
-	Connection *Connection
-	IDField    string
-	TableName  string
-	Type       reflect.Type
-	ORM        *ORM
-}
 
 // Entity is a single entity that has
 // metadatas
@@ -25,6 +17,36 @@ type Any interface{}
 // Collection is a collection of entities
 type Collection interface{}
 
+// Repository is a repository of entities of the same type
+type Repository struct {
+	Connection *Connection
+	idField    string
+	tableName  string
+	aType      reflect.Type
+	orm        *ORM
+}
+
+// TableName returns the table name for the repository
+func (repository Repository) TableName() string {
+	return repository.tableName
+}
+
+// Type return the type of entity managed by the repository
+func (repository Repository) Type() reflect.Type {
+	return repository.aType
+}
+
+// IDField returns the Id field in an entity managed by the repository
+func (repository Repository) IDField() string {
+	return repository.idField
+}
+
+// ORM returns the ORM associated with the repository
+func (repository *Repository) ORM() *ORM {
+	return repository.orm
+}
+
+// NewRepository creates a new repository
 func NewRepository(Type reflect.Type, datamapper *ORM) *Repository {
 	metadata, ok := datamapper.metadatas[Type]
 	if !ok {
@@ -44,7 +66,7 @@ func (repository *Repository) All(collection Collection) error {
 
 // Find finds an entity by id
 func (repository *Repository) Find(id Any, entity Entity) error {
-	return repository.FindOneBy(Query{Where: []string{repository.IDField, "=", "?"}, Params: []interface{}{id}, Limit: 1}, entity)
+	return repository.FindOneBy(Query{Where: []string{repository.idField, "=", "?"}, Params: []interface{}{id}, Limit: 1}, entity)
 }
 
 // FindOneBy finds one entity filtered by a query and resolve s
@@ -55,7 +77,7 @@ func (repository *Repository) FindOneBy(query QueryBuilder, entity Entity) error
 		return err
 	}
 	// check for one to many relations
-	metadata := repository.ORM.metadatas[repository.Type]
+	metadata := repository.orm.metadatas[repository.aType]
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
@@ -73,7 +95,7 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 		return err
 	}
 	// check for one to many relations
-	metadata := repository.ORM.metadatas[repository.Type]
+	metadata := repository.orm.metadatas[repository.aType]
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
@@ -84,11 +106,20 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 	return nil
 }
 
+// Execute statement
+func (repository *Repository) Execute(query QueryBuilder) (sql.Result, error) {
+	q, params, err := query.BuildQuery(repository)
+	if err != nil {
+		return nil, err
+	}
+	return repository.ORM().connection.Exec(q, params...)
+}
+
 // Count counts the number of rows
 // that match the query
 func (repository *Repository) Count(query Query) (int64, error) {
 	query.Select = []string{""}
-	query.Aggregates = []Aggregate{{Type: COUNT, StructField: "TOTAL", On: repository.IDField}}
+	query.Aggregates = []Aggregate{{Type: COUNT, StructField: "TOTAL", On: repository.idField}}
 	queryString, values, err := query.BuildQuery(repository)
 	if err != nil {
 		return 0, err
@@ -104,7 +135,7 @@ func (repository *Repository) Count(query Query) (int64, error) {
 
 // DeleteAll deletes all models
 func (repository *Repository) DeleteAll() error {
-	result, err := repository.Connection.Exec(fmt.Sprintf("DELETE FROM %s;", repository.TableName))
+	result, err := repository.Connection.Exec(fmt.Sprintf("DELETE FROM %s;", repository.tableName))
 	if err != nil {
 		return err
 	}
@@ -136,9 +167,9 @@ func (repository *Repository) doFindOneBy(query QueryBuilder, entity Entity) err
 
 // resolveId gets and returns the value of the Primary Key column
 // from the model
-func (repository *Repository) resolveId(entity Entity) Any {
+func (repository *Repository) resolveID(entity Entity) Any {
 	value := reflect.Indirect(reflect.ValueOf(entity))
-	return value.FieldByName(repository.IDField).Interface()
+	return value.FieldByName(repository.idField).Interface()
 }
 
 func (repository *Repository) resolveOneToMany(relation Relation, collection interface{}) error {
@@ -147,7 +178,7 @@ func (repository *Repository) resolveOneToMany(relation Relation, collection int
 			// The type name of the owned entity (string)
 			ownedEntity := relation.TargetEntity
 			// The repository that is used to fetch the owned
-			ownedEntityRepository, err := repository.ORM.GetRepositoryByEntityName(ownedEntity)
+			ownedEntityRepository, err := repository.orm.GetRepositoryByEntityName(ownedEntity)
 			if err != nil {
 				return err
 			}
@@ -160,7 +191,7 @@ func (repository *Repository) resolveOneToMany(relation Relation, collection int
 			collectionLength := collectionValue.Len()
 			for i := 0; i < collectionLength; i++ {
 				entityValue := reflect.Indirect(collectionValue.Index(i))
-				ids = append(ids, entityValue.FieldByName(repository.IDField).Interface())
+				ids = append(ids, entityValue.FieldByName(repository.idField).Interface())
 			}
 			// Build where query
 			whereQuery := []string{relation.IndexBy, "IN", "("}
@@ -170,7 +201,7 @@ func (repository *Repository) resolveOneToMany(relation Relation, collection int
 			whereQuery[len(whereQuery)-1] = ")"
 
 			// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
-			sliceOfOwnedEntities := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.Type), 0, 0)
+			sliceOfOwnedEntities := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.aType), 0, 0)
 			pointer := reflect.New(sliceOfOwnedEntities.Type())
 			pointer.Elem().Set(sliceOfOwnedEntities)
 
@@ -195,32 +226,32 @@ func (repository *Repository) resolveOneToMany(relation Relation, collection int
 			for i := 0; i < collectionLength; i++ {
 				entityValue := reflect.Indirect(collectionValue.Index(i))
 				// the slice value will contain the owned entities owned by the owning entity.
-				sliceValue := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.Type), 0, 0)
-				sliceValue = reflect.Append(sliceValue, ownedEntitiesMap[entityValue.FieldByName(repository.IDField).Interface()]...)
+				sliceValue := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.aType), 0, 0)
+				sliceValue = reflect.Append(sliceValue, ownedEntitiesMap[entityValue.FieldByName(repository.idField).Interface()]...)
 				entityValue.FieldByName(relation.StructField).Set(sliceValue)
 			}
 			return nil
 		}
 	}
-	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.Type)
+	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
 }
 
 func (repository *Repository) resolveOneToManySingle(relation Relation, entity Entity) error {
 
 	if relation.Fetch == Eager {
 		if relation.Type == OneToMany {
-			targetRepository, err := repository.ORM.GetRepositoryByEntityName(relation.TargetEntity)
+			targetRepository, err := repository.orm.GetRepositoryByEntityName(relation.TargetEntity)
 			if err != nil {
 				return err
 			}
 			// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
-			slice := reflect.MakeSlice(reflect.SliceOf(targetRepository.Type), 0, 0)
+			slice := reflect.MakeSlice(reflect.SliceOf(targetRepository.aType), 0, 0)
 			pointer := reflect.New(slice.Type())
 			pointer.Elem().Set(slice)
 
 			err = targetRepository.doFindBy(
 				Query{Where: []string{relation.IndexBy, "=", "?"},
-					Params: []interface{}{repository.resolveId(entity)},
+					Params: []interface{}{repository.resolveID(entity)},
 				}, pointer.Interface(),
 			)
 			if err != nil {
@@ -231,5 +262,5 @@ func (repository *Repository) resolveOneToManySingle(relation Relation, entity E
 			return nil
 		}
 	}
-	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.Type)
+	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
 }

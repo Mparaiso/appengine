@@ -77,7 +77,7 @@ func (u *UnityOfWork) Detach(entity MetadataProvider) {
 func (u *UnityOfWork) Flush(orm *ORM) error {
 	// See http://stackoverflow.com/questions/24318389/golang-elem-vs-indirect-in-the-reflect-package
 
-	transaction, err := orm.connection.BeginTransaction()
+	transaction, err := orm.connection.Begin()
 	if err != nil {
 		return err
 	}

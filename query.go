@@ -60,9 +60,13 @@ type Query struct {
 	Set        map[string]interface{}
 }
 
+func (query Query) GetType() QueryType {
+	return query.Type
+}
+
 // BuildQuery builds the querystring with placeholders , returns it with the parameters
 // to replace the placeholders and an error.
-func (query Query) BuildQuery(repository *Repository) (string, []interface{}, error) {
+func (query Query) BuildQuery(repository RepositoryInterface) (string, []interface{}, error) {
 
 	switch query.Type {
 
@@ -96,7 +100,7 @@ func (query Query) BuildQuery(repository *Repository) (string, []interface{}, er
 		return q, values, nil
 
 	case DELETE:
-		deleteStatement := fmt.Sprintf("DELETE FROM %s ", repository.TableName)
+		deleteStatement := fmt.Sprintf("DELETE FROM %s ", repository.TableName())
 		whereStatement, values, err := query.buildWhereStatement(repository)
 		if err != nil {
 			return "", values, err
@@ -114,12 +118,12 @@ func (query Query) BuildQuery(repository *Repository) (string, []interface{}, er
 
 }
 
-func (query Query) buildInsertStatment(repository *Repository) (string, []interface{}, error) {
+func (query Query) buildInsertStatment(repository RepositoryInterface) (string, []interface{}, error) {
 	values := []interface{}{}
 	columns := []string{}
-	idColumn := repository.IDField
-	tableName := repository.TableName
-	metadata := repository.ORM.GetTypeMetadata(repository.Type)
+	idColumn := repository.IDField()
+	tableName := repository.TableName()
+	metadata := repository.ORM().GetTypeMetadata(repository.Type())
 	for key, value := range query.Set {
 		if key != idColumn {
 			column := metadata.ResolveColumnNameByFieldName(key)
@@ -138,10 +142,10 @@ func (query Query) buildInsertStatment(repository *Repository) (string, []interf
 	return q, values, nil
 }
 
-func (query Query) buildUpdateStatement(repository *Repository) (string, []interface{}) {
+func (query Query) buildUpdateStatement(repository RepositoryInterface) (string, []interface{}) {
 	setStatement := ""
 	values := []interface{}{}
-	metadata := repository.ORM.GetTypeMetadata(repository.Type)
+	metadata := repository.ORM().GetTypeMetadata(repository.Type())
 	fieldMap := query.Set
 	for key, value := range fieldMap {
 		columnName := strings.ToLower(metadata.ResolveColumnNameByFieldName(key))
@@ -153,24 +157,24 @@ func (query Query) buildUpdateStatement(repository *Repository) (string, []inter
 	return updateStatement, values
 }
 
-func (query Query) buildLimitStatement(repository *Repository) string {
+func (query Query) buildLimitStatement(repository RepositoryInterface) string {
 	if query.Limit != 0 {
 		return fmt.Sprintf(" LIMIT %d ", query.Limit)
 	}
 	return ""
 }
 
-func (query Query) buildOffsetStatement(repository *Repository) string {
+func (query Query) buildOffsetStatement(repository RepositoryInterface) string {
 	if query.Offset != 0 {
 		return fmt.Sprintf(" OFFSET %d ", query.Offset)
 	}
 	return ""
 }
 
-func (query Query) buildOrderByStatment(repository *Repository) (string, error) {
+func (query Query) buildOrderByStatment(repository RepositoryInterface) (string, error) {
 	orderByStatement := ""
 	if query.OrderBy != nil {
-		metadata := repository.ORM.metadatas[repository.Type]
+		metadata := repository.ORM().metadatas[repository.Type()]
 		for key, value := range query.OrderBy {
 
 			columnName := metadata.ResolveColumnNameByFieldName(key)
@@ -188,8 +192,8 @@ func (query Query) buildOrderByStatment(repository *Repository) (string, error) 
 	return "", nil
 }
 
-func (query Query) buildSelectStatement(repository *Repository) (string, error) {
-	metadata := repository.ORM.GetTypeMetadata(repository.Type)
+func (query Query) buildSelectStatement(repository RepositoryInterface) (string, error) {
+	metadata := repository.ORM().GetTypeMetadata(repository.Type())
 	buildFromStatement := ""
 	// Get columns to be returned ( like " table.column1 AS structField1 , table.column2 AS structField2 " )
 	fieldListStatement, err := buildSelectFieldListFromColumnMetadata(metadata, query.Select...)
@@ -203,7 +207,7 @@ func (query Query) buildSelectStatement(repository *Repository) (string, error) 
 			if columnName == "" {
 				return "", fmt.Errorf("StructField '%s' Not Found on aggregate %v .", aggregate.On, aggregate)
 			}
-			buildFromStatement = buildFromStatement + " " + string(aggregate.Type) + "(" + repository.TableName + "." + columnName + ") AS " + aggregate.StructField
+			buildFromStatement = buildFromStatement + " " + string(aggregate.Type) + "(" + repository.TableName() + "." + columnName + ") AS " + aggregate.StructField
 		}
 		if fieldListStatement != "" {
 			buildFromStatement = buildFromStatement + ", "
@@ -212,13 +216,13 @@ func (query Query) buildSelectStatement(repository *Repository) (string, error) 
 	return fmt.Sprintf("SELECT %s%s ", buildFromStatement, fieldListStatement), nil
 }
 
-func (query Query) buildFromStatement(repository *Repository) string {
-	return fmt.Sprintf(" FROM %s ", repository.TableName)
+func (query Query) buildFromStatement(repository RepositoryInterface) string {
+	return fmt.Sprintf(" FROM %s ", repository.TableName())
 }
 
-func (query Query) buildWhereStatement(repository *Repository) (string, []interface{}, error) {
+func (query Query) buildWhereStatement(repository RepositoryInterface) (string, []interface{}, error) {
 	values := []interface{}{}
-	metadata := repository.ORM.metadatas[repository.Type]
+	metadata := repository.ORM().GetTypeMetadata(repository.Type())
 	if query.Where != nil {
 		if query.Params != nil {
 			values = append(values, query.Params...)

@@ -23,8 +23,38 @@ type UserInfo struct {
 	Url string
 }
 
+func TestMapRowsToSliceOfMaps(t *testing.T) {
+	db := GetDB(t)
+	for _, user := range []*User{
+		{Name: "John Doe", Email: "john.doe@acme.com"},
+		{Name: "Jane Does", Email: "jane.doe@acme.com"},
+	} {
+		_, err := db.Exec("INSERT INTO users(name,email) values(?,?);", user.Name, user.Email)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := db.Query("SELECT id,name,email,created,updated FROM users;")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := [][]interface{}{}
+	err = tools.MapRowsToSliceOfSlices(rows, &result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, ok := result[0][0].(int64); !ok {
+		t.Fatalf("Value should be a int64, got %#v", value)
+	}
+	if value, ok := result[0][1].(string); !ok {
+		t.Fatalf("Value should be a string, got %#v", value)
+	}
+	if value, ok := result[0][3].(time.Time); !ok {
+		t.Fatalf("Value should be of type time.Time, got %#v", value)
+	}
+}
 func TestMapRowsToSliceOfStruct(t *testing.T) {
-	db := GetConnection(t)
+	db := GetDB(t)
 	users := []*User{
 		{Name: "John Doe", Email: "john.doe@acme.com"},
 		{Name: "Jane Doe", Email: "jane.doe@acme.com"},
@@ -50,7 +80,7 @@ func TestMapRowsToSliceOfStruct(t *testing.T) {
 }
 
 func TestMapRowToStruct(t *testing.T) {
-	db := GetConnection(t)
+	db := GetDB(t)
 	user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
 	_, err := db.Exec("INSERT INTO users(name,email) values(?,?)", user.Name, user.Email)
 	if err != nil {
@@ -87,7 +117,28 @@ func TestMapRowToStruct(t *testing.T) {
 	}
 }
 
-func GetConnection(t *testing.T) *sql.DB {
+func TestMapRowToMap(t *testing.T) {
+	db := GetDB(t)
+	_, err := db.Exec("INSERT INTO users(name,email) values(?,?)", "John Doe", "john.doe@acme.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := []map[string]interface{}{}
+	rows, err := db.Query("SELECT * from users")
+	err = tools.MapRowsToSliceOfMaps(rows, &result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := len(result); l != 1 {
+		t.Fatal("length should be 1, got %d", l)
+	}
+	if name := result[0]["name"]; name.(string) != "John Doe" {
+		t.Fatal("Name should be 'John Doe', got %#v", name)
+	}
+	t.Logf("%#v", result[0])
+}
+
+func GetDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 
 	if err != nil {

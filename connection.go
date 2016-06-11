@@ -9,6 +9,7 @@ import (
 	"github.com/mparaiso/go-orm/tools"
 )
 
+// ConnectionOptions gather options related to Connection type.
 type ConnectionOptions struct {
 	Logger
 	IgnoreMissingFields bool
@@ -61,6 +62,18 @@ func (connection *Connection) Select(records interface{}, query string, paramete
 	return err
 }
 
+func (repository *Repository) SelectMap(query QueryBuilder, Map *map[string]interface{}) error {
+	defer connection.log(append([]interface{}{query}, parameters...)...)
+
+	rows, err := connection.db.Query(query, parameters...)
+	if err != nil {
+		return err
+	}
+	err = tools.MapRowsMap(rows, records, true)
+
+	return err
+}
+
 // Get will fetch a single record.
 // expects record to be a pointer to a struct
 // Exemple:
@@ -99,7 +112,8 @@ func (connection *Connection) log(messages ...interface{}) {
 	}
 }
 
-func (connection *Connection) BeginTransaction() (*Transaction, error) {
+// Begin initiates a transaction
+func (connection *Connection) Begin() (*Transaction, error) {
 	defer connection.log("Begin transaction")
 	transaction, err := connection.DB().Begin()
 	if err != nil {
@@ -108,6 +122,7 @@ func (connection *Connection) BeginTransaction() (*Transaction, error) {
 	return &Transaction{Logger: connection.Options.Logger, Tx: transaction}, nil
 }
 
+// Close closes the connection
 func (connection *Connection) Close() error {
 	return connection.db.Close()
 }

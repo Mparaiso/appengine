@@ -3,6 +3,7 @@ package orm
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 type ORM struct {
@@ -17,6 +18,27 @@ func NewORM(connection *Connection) *ORM {
 
 func (orm ORM) GetTypeMetadata(Type reflect.Type) Metadata {
 	return orm.metadatas[Type]
+}
+
+func (orm ORM) GetTypeForMetadata(metadata Metadata) reflect.Type {
+	for Type, meta := range orm.metadatas {
+		if meta.Entity == metadata.Entity && meta.Table == metadata.Table {
+			return Type
+		}
+	}
+	return nil
+}
+func (orm ORM) GetNameMetadata(entityName string) (Metadata, bool) {
+	entityName = strings.Trim(entityName, "\r\n\t ")
+	if entityName == "" {
+		return Metadata{}, false
+	}
+	for _, metadata := range orm.metadatas {
+		if entityName == metadata.Entity {
+			return metadata, true
+		}
+	}
+	return Metadata{}, false
 }
 
 func (orm ORM) GetValueMetadata(value reflect.Value) Metadata {

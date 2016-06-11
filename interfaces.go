@@ -1,5 +1,7 @@
 package orm
 
+import "reflect"
+
 type MetadataProvider interface {
 	ProvideMetadata() Metadata
 }
@@ -15,8 +17,16 @@ type BeforeDestroyListener interface {
 	BeforeDestroy() error
 }
 
+type RepositoryInterface interface {
+	TableName() string
+	IDField() string
+	Type() reflect.Type
+	ORM() *ORM
+}
+
 type QueryBuilder interface {
-	BuildQuery(*Repository) (string, []interface{}, error)
+	GetType() QueryType
+	BuildQuery(RepositoryInterface) (string, []interface{}, error)
 }
 
 type Logger interface {
