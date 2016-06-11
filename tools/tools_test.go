@@ -53,6 +53,7 @@ func TestMapRowsToSliceOfMaps(t *testing.T) {
 		t.Fatalf("Value should be of type time.Time, got %#v", value)
 	}
 }
+
 func TestMapRowsToSliceOfStruct(t *testing.T) {
 	db := GetDB(t)
 	users := []*User{

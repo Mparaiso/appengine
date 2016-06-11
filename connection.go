@@ -62,16 +62,26 @@ func (connection *Connection) Select(records interface{}, query string, paramete
 	return err
 }
 
-func (repository *Repository) SelectMap(query QueryBuilder, Map *map[string]interface{}) error {
+func (connection *Connection) SelectMap(Map *[]map[string]interface{}, query string, parameters ...interface{}) error {
 	defer connection.log(append([]interface{}{query}, parameters...)...)
 
 	rows, err := connection.db.Query(query, parameters...)
 	if err != nil {
 		return err
 	}
-	err = tools.MapRowsMap(rows, records, true)
+	return tools.MapRowsToSliceOfMaps(rows, Map)
 
-	return err
+}
+
+func (connection *Connection) SelectSlice(slices *[][]interface{}, query string, parameters ...interface{}) error {
+	defer connection.log(append([]interface{}{query}, parameters...)...)
+
+	rows, err := connection.db.Query(query, parameters...)
+	if err != nil {
+		return err
+	}
+	return tools.MapRowsToSliceOfSlices(rows, slices)
+
 }
 
 // Get will fetch a single record.
