@@ -3,6 +3,7 @@ package orm_test
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mparaiso/go-orm"
@@ -64,6 +65,44 @@ func TestConnectionSelect(t *testing.T) {
 	}
 	if expected, name := "john doe", users[0].Name; name != expected {
 		t.Fatalf("users[0].Name should be '%s', got '%s'", expected, name)
+	}
+}
+
+func TestConnectionSelectMap(t *testing.T) {
+	connection := GetConnection(t)
+	defer connection.Close()
+	if err := LoadFixtures(connection); err != nil {
+		t.Fatal(err)
+	}
+	var result []map[string]interface{}
+	err := connection.SelectMap(&result, "SELECT * FROM users ORDER BY ID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := len(result); l != 3 {
+		t.Fatalf("length should be 3, got %d", l)
+	}
+	if created, ok := result[0]["created"].(time.Time); !ok {
+		t.Fatalf("created should be time.Time, got %#v", created)
+	}
+}
+
+func TestConnectionSelectSlice(t *testing.T) {
+	connection := GetConnection(t)
+	defer connection.Close()
+	if err := LoadFixtures(connection); err != nil {
+		t.Fatal(err)
+	}
+	var result [][]interface{}
+	err := connection.SelectSlice(&result, "SELECT id,name,created FROM users ORDER BY ID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := len(result); l != 3 {
+		t.Fatalf("length should be 3, got %d", l)
+	}
+	if created, ok := result[0][2].(time.Time); !ok {
+		t.Fatalf("created should be time.Time, got %#v", created)
 	}
 }
 
