@@ -264,11 +264,11 @@ func buildSelectFieldListFromColumnMetadata(metadata Metadata, fieldNameSelector
 		if len(fieldNameSelector) == 1 && fieldNameSelector[0] == "" {
 			return "", nil
 		}
-		if (len(fieldNameSelector) > 0 && indexOfString(fieldNameSelector, column.StructField) >= 0) || len(fieldNameSelector) == 0 {
+		if (len(fieldNameSelector) > 0 && indexOfString(fieldNameSelector, column.Field) >= 0) || len(fieldNameSelector) == 0 {
 			if column.Name == "" {
-				fields = fields + metadata.Table.Name + "." + strings.ToLower(column.StructField) + " AS " + column.StructField + ","
+				fields = fields + metadata.Table.Name + "." + strings.ToLower(column.Field) + " AS " + column.Field + ","
 			} else {
-				fields = fields + metadata.Table.Name + "." + column.Name + " AS " + column.StructField + ","
+				fields = fields + metadata.Table.Name + "." + column.Name + " AS " + column.Field + ","
 			}
 		}
 	}

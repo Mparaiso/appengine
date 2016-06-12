@@ -8,11 +8,9 @@ func TestRepositoryFind(t *testing.T) {
 	user := GetUserFixture()[0]
 	articles := GetArticleFixture()
 	orm.MustRegister(new(User), new(Article))
-	orm.MustPersist(user)
-	orm.MustFlush()
+	orm.Persist(user).MustFlush()
 	user.AddArticles(articles...)
-	orm.MustPersist(user)
-	orm.MustFlush()
+	orm.Persist(user).MustFlush()
 
 	userRepository, err := orm.GetRepository(user)
 
@@ -35,23 +33,9 @@ func TestRepositoryFindBy(t *testing.T) {
 	articles := []*Article{{Title: "First Article"}, {Title: "Second Article"}}
 	orm := NewORM(GetConnection(t))
 	orm.Register(new(User), new(Article))
-	err := orm.Persist(user)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = orm.Flush()
-	if err != nil {
-		t.Fatal(err)
-	}
+	orm.Persist(user).MustFlush()
 	user.AddArticles(articles...)
-	err = orm.Persist(user)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = orm.Flush()
-	if err != nil {
-		t.Fatal(err)
-	}
+	orm.Persist(user).MustFlush()
 	userRepository, err := orm.GetRepository(user)
 	if err != nil {
 		t.Fatal(err)
@@ -94,4 +78,35 @@ func ThenTestRepositoryFindOneBy(repository *Repository, t *testing.T, user *Use
 		t.Fatalf("The ID of the user should be %d, got %d", user.ID, result.ID)
 	}
 
+}
+
+func TestResolveOneToOneSingle(t *testing.T) {
+	// SetUp
+	orm := GetORM(t)
+	defer orm.Connection().Close()
+	john := &User{Name: "John Doe", Email: "john.doe@acme.com"}
+	johnInfo := &UserInfo{NiceName: "John", DisplayName: "J.Doe"}
+	orm.Persist(john)
+	err := orm.Flush()
+	if err != nil {
+		t.Fatal(t)
+	}
+	john.SetUserInfo(johnInfo)
+	orm.Persist(john, johnInfo).MustFlush()
+	repository, err := orm.GetRepositoryByEntityName("User")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Test
+	result := new(User)
+	err = repository.Find(john.ID, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.UserInfo == nil {
+		t.Fatal("user.UserInfo should not be nil")
+	}
+	if result.UserInfoID != result.UserInfo.ID || result.UserInfoID == 0 {
+		t.Fatal("user.UserInfo.ID should equal %d and not be equal to 0, got %d ", result.UserInfo.ID, result.UserInfoID)
+	}
 }

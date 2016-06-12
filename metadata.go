@@ -2,6 +2,7 @@ package orm
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 )
 
@@ -40,16 +41,16 @@ type Table struct {
 
 // Column is a column metadata
 type Column struct {
-	ID          bool
-	StructField string
-	Name        string
+	ID    bool
+	Field string
+	Name  string
 }
 
 type JoinColumn struct {
 	// The referenced id of the owning entity
-	ReferencedStructField string
+	ReferencedField string
 	// the foreign key of the owned entity
-	StructField string
+	Field string
 }
 
 // Relation Represents a relation between 2 entities
@@ -59,14 +60,14 @@ type Relation struct {
 	// The entity which is the target of the relation
 	TargetEntity string
 	MappedBy     string
-	IndexBy      string
+	IndexedBy      string
 	Cascade
 	// Whether the related entities are loaded
 	// automatically or not.
 	Fetch
 	// The field where to load the related entities
 	// if needed.
-	StructField string
+	Field string
 	// For a OneToOne relationship
 	JoinColumn JoinColumn
 }
@@ -82,14 +83,14 @@ type Metadata struct {
 // MetadataFrom creates a datamapper metadata from a json string
 // or returns an error
 func MetadataFrom(jsonString string) (Metadata, error) {
-	var dmm Metadata
-	err := json.Unmarshal([]byte(jsonString), &dmm)
-	return dmm, err
+	var meta Metadata
+	err := json.Unmarshal([]byte(jsonString), &meta)
+	return meta, err
 }
 
-func (dmm Metadata) FindIdColumn() Column {
+func (meta Metadata) FindIdColumn() Column {
 	var column Column
-	for _, value := range dmm.Columns {
+	for _, value := range meta.Columns {
 		if value.ID {
 			column = value
 			break
@@ -98,14 +99,14 @@ func (dmm Metadata) FindIdColumn() Column {
 	return column
 }
 
-func (dmm Metadata) ResolveColumnNameByFieldName(fieldName string) string {
+func (meta Metadata) ResolveColumnNameByFieldName(fieldName string) string {
 	columnName := ""
-	for _, column := range dmm.Columns {
-		if fieldName == column.StructField {
+	for _, column := range meta.Columns {
+		if fieldName == column.Field {
 			if column.Name != "" {
 				columnName = column.Name
 			} else {
-				columnName = column.StructField
+				columnName = column.Field
 			}
 			break
 		}
@@ -113,27 +114,32 @@ func (dmm Metadata) ResolveColumnNameByFieldName(fieldName string) string {
 	return columnName
 }
 
-func (dmm Metadata) BuildFieldValueMap(entity interface{}) map[string]interface{} {
+func (meta Metadata) BuildFieldValueMap(entity interface{}) (map[string]interface{}, error) {
 	Set := map[string]interface{}{}
 	entityValue := reflect.Indirect(reflect.ValueOf(entity))
-	for _, column := range dmm.Columns {
-		Set[column.StructField] = entityValue.FieldByName(column.StructField).Interface()
+	for _, column := range meta.Columns {
+		if fieldValue := reflect.Indirect(entityValue.FieldByName(column.Field)); fieldValue != (reflect.Value{}) {
+			Set[column.Field] = fieldValue.Interface()
+		} else {
+			fmt.Errorf("Field '%s' not found for column '%s' in entity '%s'", column.Field, meta.ResolveColumnNameFor(column), meta.Entity)
+		}
+
 	}
-	return Set
+	return Set, nil
 }
 
-func (dmm Metadata) FieldMap(entity interface{}) (fieldMap map[string]reflect.Value) {
+func (meta Metadata) FieldMap(entity interface{}) (fieldMap map[string]reflect.Value) {
 	value := reflect.Indirect(reflect.ValueOf(entity))
 	fieldMap = map[string]reflect.Value{}
-	for _, column := range dmm.Columns {
-		fieldMap[dmm.ResolveColumnNameFor(column)] = value.FieldByName(column.StructField)
+	for _, column := range meta.Columns {
+		fieldMap[meta.ResolveColumnNameFor(column)] = value.FieldByName(column.Field)
 	}
 	return
 }
 
-func (dmm Metadata) ResolveColumnNameFor(column Column) string {
+func (meta Metadata) ResolveColumnNameFor(column Column) string {
 	if column.Name == "" {
-		return column.StructField
+		return column.Field
 	}
 	return column.Name
 }

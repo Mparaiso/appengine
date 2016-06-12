@@ -102,7 +102,10 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
 
-		Set := metadata.BuildFieldValueMap(entity)
+		Set, err := metadata.BuildFieldValueMap(entity)
+		if err != nil {
+			return err
+		}
 		query, values, err := Query{Type: INSERT, Set: Set}.BuildQuery(repository)
 		if err != nil {
 			transaction.Rollback()
@@ -118,7 +121,7 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			transaction.Rollback()
 			return err
 		}
-		reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().StructField).SetInt(lastInsertedId)
+		reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).SetInt(lastInsertedId)
 	}
 	// Update entities
 	for _, entity := range u.updated {
@@ -140,8 +143,11 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			transaction.RollBack()
 			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
 		}
-		Set := metadata.BuildFieldValueMap(entity)
-		IDField := metadata.FindIdColumn().StructField
+		Set, err := metadata.BuildFieldValueMap(entity)
+		if err != nil {
+			return err
+		}
+		IDField := metadata.FindIdColumn().Field
 		entityValue := reflect.Indirect(reflect.ValueOf(entity))
 		ID := entityValue.FieldByName(IDField).Interface()
 		delete(Set, IDField)
@@ -178,7 +184,7 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 		}
 
 		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
-		id := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().StructField).Interface()
+		id := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).Interface()
 		query, values, err := Query{Type: DELETE,
 			Where:  []string{idColumn, "=", "?"},
 			Params: []interface{}{id},

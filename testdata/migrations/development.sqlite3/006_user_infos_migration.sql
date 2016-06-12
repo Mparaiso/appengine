@@ -1,5 +1,5 @@
 -- +migrate Up
-CREATE TABLE user_infos(
+CREATE TABLE userinfos(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	nicename VARCHAR(50),
 	url VARCHAR(100),

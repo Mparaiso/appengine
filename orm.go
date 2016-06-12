@@ -117,89 +117,86 @@ func (orm *ORM) UnityOfWork() *UnityOfWork {
 // Persist inserts or updates an entity depending on
 // the value of its primary key. If the primary key equals
 // 0, a new entity will be inserted
-func (orm *ORM) Persist(entities ...Entity) error {
+func (orm *ORM) Persist(entities ...Entity) *ORM {
 
 	for _, entity := range entities {
-		_, err := orm.GetRepository(entity)
-		if err != nil {
-			return err
-		}
+
 		if orm.resolveId(entity).(int64) == 0 {
 			orm.UnityOfWork().Create(entity)
 		} else {
 			orm.UnityOfWork().Update(entity)
 		}
 
-		metadata := orm.GetEntityMetadata(entity)
+		_, err := orm.GetRepository(entity)
+		if err == nil {
 
-		for _, relation := range metadata.Relations {
+			metadata := orm.GetEntityMetadata(entity)
 
-			if (relation.Cascade & Persist) != 0 {
+			for _, relation := range metadata.Relations {
 
-				if relation.Type == OneToMany {
-					entityValue := reflect.Indirect(reflect.ValueOf(entity))
-					collectionValue := entityValue.FieldByName(relation.StructField)
+				if (relation.Cascade & Persist) != 0 {
 
-					for i := 0; i < collectionValue.Len(); i++ {
-						if e, ok := collectionValue.Index(i).Interface().(Entity); ok {
+					if relation.Type == OneToMany {
+						entityValue := reflect.Indirect(reflect.ValueOf(entity))
+						collectionValue := entityValue.FieldByName(relation.Field)
+
+						for i := 0; i < collectionValue.Len(); i++ {
+							if e, ok := collectionValue.Index(i).Interface().(Entity); ok {
+								orm.Persist(e)
+							}
+						}
+					}
+					if relation.Type == OneToOne {
+						entityValue := reflect.Indirect(reflect.ValueOf(entity))
+						relatedEntityValue := entityValue.FieldByName(relation.Field)
+						if e, ok := relatedEntityValue.Interface().(Entity); ok && !reflect.ValueOf(e).IsNil() {
 							orm.Persist(e)
 						}
+
 					}
 				}
+
 			}
 		}
 	}
-	return nil
-}
-
-func (orm *ORM) MustPersist(entities ...Entity) *ORM {
-	if err := orm.Persist(entities...); err != nil {
-		panic(err)
-	}
 	return orm
 }
-func (orm *ORM) Remove(entities ...Entity) error {
+
+func (orm *ORM) Remove(entities ...Entity) *ORM {
 	for _, entity := range entities {
 		_, err := orm.GetRepository(entity)
-		if err != nil {
-			return err
-		}
-		metadata := orm.GetEntityMetadata(entity)
-		for _, relation := range metadata.Relations {
-			// Cascade remove.
-			// The owned entities are removed BEFORE the owning entity
-			// to prevent constraint violations like referencial integrity errors
+		if err == nil {
+			metadata := orm.GetEntityMetadata(entity)
+			for _, relation := range metadata.Relations {
+				// Cascade remove.
+				// The owned entities are removed BEFORE the owning entity
+				// to prevent constraint violations like referencial integrity errors
 
-			if (relation.Cascade & Remove) != 0 {
-				if relation.Type == OneToMany {
-					entityValue := reflect.Indirect(reflect.ValueOf(entity))
-					collectionValue := entityValue.FieldByName(relation.StructField)
-					for i := 0; i < collectionValue.Len(); i++ {
-						if e, ok := collectionValue.Index(i).Interface().(Entity); ok {
-							orm.Remove(e)
+				if (relation.Cascade & Remove) != 0 {
+					if relation.Type == OneToMany {
+						entityValue := reflect.Indirect(reflect.ValueOf(entity))
+						collectionValue := entityValue.FieldByName(relation.Field)
+						for i := 0; i < collectionValue.Len(); i++ {
+							if e, ok := collectionValue.Index(i).Interface().(Entity); ok {
+								orm.Remove(e)
+							}
+
 						}
-
 					}
 				}
 			}
+			orm.UnityOfWork().Remove(entity)
 		}
-		orm.UnityOfWork().Remove(entity)
-	}
-	return nil
-}
-
-func (orm *ORM) MustRemove(entities ...Entity) *ORM {
-	if err := orm.Remove(entities...); err != nil {
-		panic(err)
 	}
 	return orm
 }
+
 func (orm *ORM) Flush() error {
 	return orm.UnityOfWork().Flush(orm)
 }
 
 func (orm *ORM) MustFlush() {
-	if err := orm.UnityOfWork().Flush(orm); err != nil {
+	if err := orm.Flush(); err != nil {
 		panic(err)
 	}
 }
@@ -209,5 +206,5 @@ func (orm *ORM) MustFlush() {
 func (orm *ORM) resolveId(entity Entity) Any {
 	Type := reflect.TypeOf(entity)
 	value := reflect.Indirect(reflect.ValueOf(entity))
-	return value.FieldByName(orm.GetTypeMetadata(Type).FindIdColumn().StructField).Interface()
+	return value.FieldByName(orm.GetTypeMetadata(Type).FindIdColumn().Field).Interface()
 }

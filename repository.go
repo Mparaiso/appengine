@@ -54,7 +54,7 @@ func NewRepository(Type reflect.Type, datamapper *ORM) *Repository {
 	}
 	idField := metadata.FindIdColumn().Name
 	if idField == "" {
-		idField = metadata.FindIdColumn().StructField
+		idField = metadata.FindIdColumn().Field
 	}
 	return &Repository{datamapper.Connection(), idField, metadata.Table.Name, Type, datamapper}
 }
@@ -81,7 +81,10 @@ func (repository *Repository) FindOneBy(query QueryBuilder, entity Entity) error
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
-				repository.resolveOneToManySingle(relation, entity)
+				repository.ResolveOneToManySingle(relation, entity)
+			}
+			if relation.Type == OneToOne {
+				repository.ResolveOneToOneSingle(relation, entity)
 			}
 		}
 	}
@@ -99,7 +102,7 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
-				repository.resolveOneToMany(relation, collection)
+				repository.ResolveOneToMany(relation, collection)
 			}
 		}
 	}
@@ -172,95 +175,115 @@ func (repository *Repository) resolveID(entity Entity) Any {
 	return value.FieldByName(repository.idField).Interface()
 }
 
-func (repository *Repository) resolveOneToMany(relation Relation, collection interface{}) error {
-	if relation.Fetch == Eager {
-		if relation.Type == OneToMany {
-			// The type name of the owned entity (string)
-			ownedEntity := relation.TargetEntity
-			// The repository that is used to fetch the owned
-			ownedEntityRepository, err := repository.orm.GetRepositoryByEntityName(ownedEntity)
-			if err != nil {
-				return err
-			}
+func (repository *Repository) ResolveOneToMany(relation Relation, collection interface{}) error {
 
-			// Get all collection IDs
-			ids := []interface{}{}
-			// the reflect.Value of the collection, for reflection purposes
-			collectionValue := reflect.Indirect(reflect.ValueOf(collection))
-			// Fill with IDs to fetch
-			collectionLength := collectionValue.Len()
-			for i := 0; i < collectionLength; i++ {
-				entityValue := reflect.Indirect(collectionValue.Index(i))
-				ids = append(ids, entityValue.FieldByName(repository.idField).Interface())
-			}
-			// Build where query
-			whereQuery := []string{relation.IndexBy, "IN", "("}
-			for range ids {
-				whereQuery = append(whereQuery, "?", ",")
-			}
-			whereQuery[len(whereQuery)-1] = ")"
-
-			// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
-			sliceOfOwnedEntities := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.aType), 0, 0)
-			pointer := reflect.New(sliceOfOwnedEntities.Type())
-			pointer.Elem().Set(sliceOfOwnedEntities)
-
-			// Get All related target records in one request
-			err = ownedEntityRepository.doFindBy(Query{Where: whereQuery, Params: ids, OrderBy: map[string]Order{relation.IndexBy: ASC}}, pointer.Interface())
-			if err != nil {
-				return err
-			}
-			// assign target records to the returned collection entities
-			sliceOfOwnedEntities = pointer.Elem()
-			ownedEntitiesMap := map[interface{}][]reflect.Value{}
-			sliceOfOwnedEntitiesLength := sliceOfOwnedEntities.Len()
-			for i := 0; i < sliceOfOwnedEntitiesLength; i++ {
-				ownedEntity := sliceOfOwnedEntities.Index(i)
-				owningEntityIndex := reflect.Indirect(ownedEntity).FieldByName(relation.IndexBy).Interface()
-				if _, ok := ownedEntitiesMap[owningEntityIndex]; !ok {
-					ownedEntitiesMap[owningEntityIndex] = []reflect.Value{}
-				}
-				ownedEntitiesMap[owningEntityIndex] = append(ownedEntitiesMap[owningEntityIndex], ownedEntity)
-			}
-			// add target records to each entity of the returned collection
-			for i := 0; i < collectionLength; i++ {
-				entityValue := reflect.Indirect(collectionValue.Index(i))
-				// the slice value will contain the owned entities owned by the owning entity.
-				sliceValue := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.aType), 0, 0)
-				sliceValue = reflect.Append(sliceValue, ownedEntitiesMap[entityValue.FieldByName(repository.idField).Interface()]...)
-				entityValue.FieldByName(relation.StructField).Set(sliceValue)
-			}
-			return nil
+	if relation.Type == OneToMany {
+		// The type name of the owned entity (string)
+		ownedEntity := relation.TargetEntity
+		// The repository that is used to fetch the owned
+		ownedEntityRepository, err := repository.orm.GetRepositoryByEntityName(ownedEntity)
+		if err != nil {
+			return err
 		}
+
+		// Get all collection IDs
+		ids := []interface{}{}
+		// the reflect.Value of the collection, for reflection purposes
+		collectionValue := reflect.Indirect(reflect.ValueOf(collection))
+		// Fill with IDs to fetch
+		collectionLength := collectionValue.Len()
+		for i := 0; i < collectionLength; i++ {
+			entityValue := reflect.Indirect(collectionValue.Index(i))
+			ids = append(ids, entityValue.FieldByName(repository.idField).Interface())
+		}
+		// Build where query
+		whereQuery := []string{relation.IndexedBy, "IN", "("}
+		for range ids {
+			whereQuery = append(whereQuery, "?", ",")
+		}
+		whereQuery[len(whereQuery)-1] = ")"
+
+		// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
+		sliceOfOwnedEntities := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.aType), 0, 0)
+		pointer := reflect.New(sliceOfOwnedEntities.Type())
+		pointer.Elem().Set(sliceOfOwnedEntities)
+
+		// Get All related target records in one request
+		err = ownedEntityRepository.doFindBy(Query{Where: whereQuery, Params: ids, OrderBy: map[string]Order{relation.IndexedBy: ASC}}, pointer.Interface())
+		if err != nil {
+			return err
+		}
+		// assign target records to the returned collection entities
+		sliceOfOwnedEntities = pointer.Elem()
+		ownedEntitiesMap := map[interface{}][]reflect.Value{}
+		sliceOfOwnedEntitiesLength := sliceOfOwnedEntities.Len()
+		for i := 0; i < sliceOfOwnedEntitiesLength; i++ {
+			ownedEntity := sliceOfOwnedEntities.Index(i)
+			owningEntityIndex := reflect.Indirect(ownedEntity).FieldByName(relation.IndexedBy).Interface()
+			if _, ok := ownedEntitiesMap[owningEntityIndex]; !ok {
+				ownedEntitiesMap[owningEntityIndex] = []reflect.Value{}
+			}
+			ownedEntitiesMap[owningEntityIndex] = append(ownedEntitiesMap[owningEntityIndex], ownedEntity)
+		}
+		// add target records to each entity of the returned collection
+		for i := 0; i < collectionLength; i++ {
+			entityValue := reflect.Indirect(collectionValue.Index(i))
+			// the slice value will contain the owned entities owned by the owning entity.
+			sliceValue := reflect.MakeSlice(reflect.SliceOf(ownedEntityRepository.aType), 0, 0)
+			sliceValue = reflect.Append(sliceValue, ownedEntitiesMap[entityValue.FieldByName(repository.idField).Interface()]...)
+			entityValue.FieldByName(relation.Field).Set(sliceValue)
+		}
+		return nil
 	}
+
 	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
 }
 
-func (repository *Repository) resolveOneToManySingle(relation Relation, entity Entity) error {
+func (repository *Repository) ResolveOneToManySingle(relation Relation, entity Entity) error {
 
-	if relation.Fetch == Eager {
-		if relation.Type == OneToMany {
-			targetRepository, err := repository.orm.GetRepositoryByEntityName(relation.TargetEntity)
-			if err != nil {
-				return err
-			}
-			// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
-			slice := reflect.MakeSlice(reflect.SliceOf(targetRepository.aType), 0, 0)
-			pointer := reflect.New(slice.Type())
-			pointer.Elem().Set(slice)
+	if relation.Type == OneToMany {
+		targetRepository, err := repository.orm.GetRepositoryByEntityName(relation.TargetEntity)
+		if err != nil {
+			return err
+		}
+		// See http://stackoverflow.com/questions/25384640/why-golang-reflect-makeslice-returns-un-addressable-value
+		slice := reflect.MakeSlice(reflect.SliceOf(targetRepository.aType), 0, 0)
+		pointer := reflect.New(slice.Type())
+		pointer.Elem().Set(slice)
 
-			err = targetRepository.doFindBy(
-				Query{Where: []string{relation.IndexBy, "=", "?"},
-					Params: []interface{}{repository.resolveID(entity)},
-				}, pointer.Interface(),
-			)
-			if err != nil {
-				return err
-			}
-			entityValue := reflect.Indirect(reflect.ValueOf(entity))
-			entityValue.FieldByName(relation.StructField).Set(pointer.Elem())
-			return nil
+		err = targetRepository.doFindBy(
+			Query{Where: []string{relation.IndexedBy, "=", "?"},
+				Params: []interface{}{repository.resolveID(entity)},
+			}, pointer.Interface(),
+		)
+		if err != nil {
+			return err
+		}
+		entityValue := reflect.Indirect(reflect.ValueOf(entity))
+		entityValue.FieldByName(relation.Field).Set(pointer.Elem())
+		return nil
+	}
+
+	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
+}
+
+func (repository *Repository) ResolveOneToOneSingle(relation Relation, entity Entity) error {
+	if relation.Type == OneToOne {
+		//entityValue := reflect.Indirect(reflect.ValueOf(entity))
+		relatedEntityRepository, err := repository.ORM().GetRepositoryByEntityName(relation.TargetEntity)
+		if err != nil {
+			return err
+		}
+		relatedValue := reflect.New(relatedEntityRepository.Type())
+		// entityValue.FieldByName(relation.Field).Set(relatedValue)
+		id := repository.resolveID(entity)
+		err = relatedEntityRepository.FindOneBy(
+			Query{Where: []string{relation.IndexedBy, "=", "?"}, Params: []interface{}{id}},
+			relatedValue.Elem().Interface(),
+		)
+		if err != nil {
+			return err
 		}
 	}
-	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
+	return nil
 }
