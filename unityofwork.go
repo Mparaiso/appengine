@@ -1,7 +1,6 @@
 package orm
 
 import (
-	"fmt"
 	"reflect"
 )
 
@@ -95,13 +94,7 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			}
 		}
 		values := []interface{}{}
-		Type := reflect.TypeOf(entity)
-		metadata := orm.metadatas[Type]
-		if &metadata == nil {
-			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
-		}
-
+		metadata := orm.GetEntityMetadata(entity)
 		Set, err := metadata.BuildFieldValueMap(entity)
 		if err != nil {
 			return err
@@ -122,6 +115,9 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			return err
 		}
 		reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).SetInt(lastInsertedId)
+		if err := AfterPersist(entity, orm); err != nil {
+			return err
+		}
 	}
 	// Update entities
 	for _, entity := range u.updated {
@@ -139,10 +135,6 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 		values := []interface{}{}
 		Type := reflect.TypeOf(entity)
 		metadata := orm.metadatas[Type]
-		if &metadata == nil {
-			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
-		}
 		Set, err := metadata.BuildFieldValueMap(entity)
 		if err != nil {
 			return err
@@ -167,22 +159,18 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			transaction.Rollback()
 			return err
 		}
-
+		if err := AfterPersist(entity, orm); err != nil {
+			return err
+		}
 	}
 	// Delete entities
 	for _, entity := range u.deleted {
-		Type := reflect.TypeOf(entity)
 		repository, err := orm.GetRepository(entity)
 		if err != nil {
 			transaction.Rollback()
 			return err
 		}
-		metadata := orm.metadatas[Type]
-		if &metadata == nil {
-			transaction.RollBack()
-			return fmt.Errorf("entity '%#v' of type '%#v' is not managed by the datamapper", entity, Type)
-		}
-
+		metadata := orm.GetEntityMetadata(entity)
 		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
 		id := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).Interface()
 		query, values, err := Query{Type: DELETE,
@@ -208,5 +196,26 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 	u.created = []MetadataProvider{}
 	u.updated = []MetadataProvider{}
 	u.deleted = []MetadataProvider{}
+	return nil
+}
+
+func AfterPersist(entity Entity, orm *ORM) error {
+	_, err := orm.GetRepository(entity)
+	if err != nil {
+		return err
+	}
+	metadata := orm.GetEntityMetadata(entity)
+	entityID := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).Int()
+	for _, relation := range metadata.Relations {
+		if (relation.Cascade & Persist) != 0 {
+			if relation.Type == OneToOne {
+				entityValue := reflect.ValueOf(entity)
+				relatedEntityValue := reflect.Indirect(entityValue).FieldByName(relation.Field)
+				if !relatedEntityValue.IsNil() {
+					reflect.Indirect(relatedEntityValue).FieldByName(relation.IndexedBy).SetInt(entityID)
+				}
+			}
+		}
+	}
 	return nil
 }
