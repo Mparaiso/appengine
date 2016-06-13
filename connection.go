@@ -109,7 +109,6 @@ func (connection *Connection) Get(record interface{}, query string, parameters .
 		return err
 	}
 	if pointerOfSliceOfRecords.Elem().Len() >= 1 {
-		fmt.Printf("\n XXX %#v \n\n", recordValue.Interface())
 		recordValue.Elem().Set(reflect.Indirect(pointerOfSliceOfRecords).Index(0).Elem())
 
 	} else {
