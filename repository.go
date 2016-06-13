@@ -81,10 +81,13 @@ func (repository *Repository) FindOneBy(query QueryBuilder, entity Entity) error
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
-				repository.ResolveOneToManySingle(relation, entity)
+				err = repository.resolveOneToManySingle(relation, entity)
 			}
 			if relation.Type == OneToOne {
-				repository.ResolveOneToOneSingle(relation, entity)
+				err = repository.resolveOneToOneSingle(relation, entity)
+			}
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -102,7 +105,13 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 	for _, relation := range metadata.Relations {
 		if relation.Fetch == Eager {
 			if relation.Type == OneToMany {
-				repository.ResolveOneToMany(relation, collection)
+				err = repository.resolveOneToMany(relation, collection)
+			}
+			if relation.Type == OneToOne {
+				err = repository.resolveOneToOne(relation, collection)
+			}
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -175,7 +184,7 @@ func (repository *Repository) resolveID(entity Entity) Any {
 	return value.FieldByName(repository.idField).Interface()
 }
 
-func (repository *Repository) ResolveOneToMany(relation Relation, collection interface{}) error {
+func (repository *Repository) resolveOneToMany(relation Relation, collection interface{}) error {
 
 	if relation.Type == OneToMany {
 		// The type name of the owned entity (string)
@@ -239,7 +248,7 @@ func (repository *Repository) ResolveOneToMany(relation Relation, collection int
 	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
 }
 
-func (repository *Repository) ResolveOneToManySingle(relation Relation, entity Entity) error {
+func (repository *Repository) resolveOneToManySingle(relation Relation, entity Entity) error {
 
 	if relation.Type == OneToMany {
 		targetRepository, err := repository.orm.GetRepositoryByEntityName(relation.TargetEntity)
@@ -267,23 +276,88 @@ func (repository *Repository) ResolveOneToManySingle(relation Relation, entity E
 	return fmt.Errorf("No relation to resolve for Relation '%v' for Type '%s' ", relation, repository.aType)
 }
 
-func (repository *Repository) ResolveOneToOneSingle(relation Relation, entity Entity) error {
+func (repository *Repository) resolveOneToOne(relation Relation, collection interface{}) error {
 	if relation.Type == OneToOne {
-		//entityValue := reflect.Indirect(reflect.ValueOf(entity))
+		collectionValue := reflect.Indirect(reflect.ValueOf(collection))
+		if reflect.Slice != collectionValue.Kind() && reflect.Array != collectionValue.Kind() {
+			return NotASliceError(fmt.Sprintf("Slice or Array expected, got %v", collection))
+		}
+		ids := []interface{}{}
+		for i := 0; i < collectionValue.Len(); i++ {
+			ids = append(ids, reflect.Indirect(collectionValue.Index(i)).FieldByName(repository.IDField()).Interface())
+		}
+		resultRepository, err := repository.ORM().GetRepositoryByEntityName(relation.TargetEntity)
+		if err != nil {
+			return err
+		}
+		sliceOfResultsType := reflect.SliceOf(resultRepository.Type())
+		sliceOfResultValue := reflect.MakeSlice(sliceOfResultsType, 0, 0)
+		pointer := reflect.New(sliceOfResultsType)
+		pointer.Elem().Set(sliceOfResultValue)
+		query := Query{Where: []string{relation.IndexedBy, "IN", "("}, Params: []interface{}{}}
+		for _, id := range ids {
+			query.Where = append(query.Where, "?", ",")
+			query.Params = append(query.Params, id)
+		}
+		query.Where = append(query.Where[:len(query.Where)-1], ")")
+		if err = resultRepository.FindBy(query, pointer.Interface()); err != nil {
+			return err
+		}
+		sliceOfResultValue = reflect.Indirect(pointer)
+		for i := 0; i < sliceOfResultValue.Len(); i++ {
+			for j := 0; j < collectionValue.Len(); j++ {
+				if target, entity := reflect.Indirect(sliceOfResultValue.Index(i)), reflect.Indirect(collectionValue.Index(j)); target.FieldByName(relation.IndexedBy).Interface() == entity.FieldByName(repository.IDField()).Interface() {
+					entity.FieldByName(relation.Field).Set(sliceOfResultValue.Index(i))
+					break
+				}
+			}
+		}
+	} else {
+		return RelationNotHandled(fmt.Sprintf("The relation %v is not handled by ResolveOneToOne", relation))
+	}
+	return nil
+}
+
+func (repository *Repository) resolveOneToOneSingle(relation Relation, entity Entity) error {
+	if relation.Type == OneToOne {
+		entityValue := reflect.Indirect(reflect.ValueOf(entity))
 		relatedEntityRepository, err := repository.ORM().GetRepositoryByEntityName(relation.TargetEntity)
 		if err != nil {
 			return err
 		}
-		relatedValue := reflect.New(relatedEntityRepository.Type())
+		slice := reflect.MakeSlice(reflect.SliceOf(relatedEntityRepository.Type()), 0, 0)
+		pointer := reflect.New(slice.Type())
+		pointer.Elem().Set(slice)
 		// entityValue.FieldByName(relation.Field).Set(relatedValue)
 		id := repository.resolveID(entity)
-		err = relatedEntityRepository.FindOneBy(
+		err = relatedEntityRepository.FindBy(
 			Query{Where: []string{relation.IndexedBy, "=", "?"}, Params: []interface{}{id}},
-			relatedValue.Elem().Interface(),
+			pointer.Interface(),
 		)
 		if err != nil {
 			return err
 		}
+		if pointer.Elem().Len() > 0 {
+			entityValue.FieldByName(relation.Field).Set(pointer.Elem().Index(0))
+		}
+	}
+	return nil
+}
+
+func (repository *Repository) LoadRelationSingle(entity Entity, fieldName string) error {
+	if reflect.TypeOf(entity) != repository.Type() {
+		return fmt.Errorf("The repository (%s) doesn't manage entities of type %v", repository.Type(), entity)
+	}
+	metadata := repository.ORM().GetEntityMetadata(entity)
+	relation, resolved := metadata.ResolveRelationForFieldName(fieldName)
+	if !resolved {
+		return fmt.Errorf("Relation not found for field name '%s' in entity %s ", fieldName, entity)
+	}
+	switch relation.Type {
+	case OneToOne:
+		return repository.resolveOneToOneSingle(relation, entity)
+	case OneToMany:
+		return repository.resolveOneToManySingle(relation, entity)
 	}
 	return nil
 }

@@ -57,11 +57,11 @@ type User struct {
 	PasswordDigest string
 	Articles       []*Article
 	UserInfo       *UserInfo
-	UserInfoID     int64
 }
 
 func (user *User) SetUserInfo(userInfo *UserInfo) {
 	user.UserInfo = userInfo
+	userInfo.User = user
 	userInfo.UserID = user.ID
 }
 func (User) ProvideMetadata() Metadata {
@@ -75,7 +75,6 @@ func (User) ProvideMetadata() Metadata {
 			{Field: "Created"},
 			{Field: "Updated"},
 			{Field: "PasswordDigest", Name: "password_digest"},
-			{Field: "UserInfoID", Name: "userinfo_id"},
 		},
 		Relations: []Relation{
 			{
@@ -94,7 +93,6 @@ func (User) ProvideMetadata() Metadata {
 				IndexedBy:    "UserID",
 				Cascade:      Persist | Remove,
 				Fetch:        Eager,
-				//JoinColumn:   JoinColumn{Field: "UserInfoID", ReferencedField: "ID"},
 			},
 		},
 	}

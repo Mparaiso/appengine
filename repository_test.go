@@ -4,7 +4,7 @@ import "testing"
 import . "github.com/mparaiso/go-orm"
 
 func TestRepositoryFind(t *testing.T) {
-	orm := NewORM(GetConnection(t))
+	orm := GetORM(t)
 	user := GetUserFixture()[0]
 	articles := GetArticleFixture()
 	orm.MustRegister(new(User), new(Article))
@@ -31,8 +31,7 @@ func TestRepositoryFind(t *testing.T) {
 func TestRepositoryFindBy(t *testing.T) {
 	user := &User{Name: "John Doe", Email: "john.doe@acme.com"}
 	articles := []*Article{{Title: "First Article"}, {Title: "Second Article"}}
-	orm := NewORM(GetConnection(t))
-	orm.Register(new(User), new(Article))
+	orm := GetORM(t)
 	orm.Persist(user).MustFlush()
 	user.AddArticles(articles...)
 	orm.Persist(user).MustFlush()
@@ -86,13 +85,8 @@ func TestResolveOneToOneSingle(t *testing.T) {
 	defer orm.Connection().Close()
 	john := &User{Name: "John Doe", Email: "john.doe@acme.com"}
 	johnInfo := &UserInfo{NiceName: "John", DisplayName: "J.Doe"}
-	orm.Persist(john)
-	err := orm.Flush()
-	if err != nil {
-		t.Fatal(t)
-	}
 	john.SetUserInfo(johnInfo)
-	orm.Persist(john, johnInfo).MustFlush()
+	orm.Persist(john).MustFlush()
 	repository, err := orm.GetRepositoryByEntityName("User")
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +100,42 @@ func TestResolveOneToOneSingle(t *testing.T) {
 	if result.UserInfo == nil {
 		t.Fatal("user.UserInfo should not be nil")
 	}
-	if result.UserInfoID != result.UserInfo.ID || result.UserInfoID == 0 {
-		t.Fatal("user.UserInfo.ID should equal %d and not be equal to 0, got %d ", result.UserInfo.ID, result.UserInfoID)
+	if result.UserInfo.NiceName != johnInfo.NiceName {
+		t.Fatalf("result.UserInfo.NiceName should be '%S' got '%s'", johnInfo.NiceName, result.UserInfo.NiceName)
+	}
+}
+
+func TestResolveOneToOne(t *testing.T) {
+	// SetUp
+	orm := GetORM(t)
+	users := []*User{
+		{Name: "John Doe", Email: "john.doe@acme.com", UserInfo: &UserInfo{NiceName: "John D."}},
+		{Name: "Jane Doe", Email: "jane.doe@acme.com", UserInfo: &UserInfo{NiceName: "Jane D."}},
+	}
+	err := orm.Persist(users[0], users[1]).Flush()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository, err := orm.GetRepositoryByEntityName("User")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := []*User{}
+	err = repository.FindBy(Query{
+		OrderBy: map[string]Order{"ID": ASC},
+		Where:   []string{"ID", "IN", "(", "?", ",", "?", ")"},
+		Params:  array{users[0].ID, users[1].ID},
+	}, &result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, m := len(result), len(users); l != m {
+		t.Fatalf("Length should be %d, got %d", m, l)
+	}
+	if result[0].UserInfo == nil {
+		t.Fatal("result[0].UserInfo should not be nil")
+	}
+	if e, a := result[0].UserInfo.NiceName, users[0].UserInfo.NiceName; e != a {
+		t.Fatalf("NiceName should be %s, got %s", e, a)
 	}
 }

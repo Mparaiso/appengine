@@ -60,7 +60,7 @@ type Relation struct {
 	// The entity which is the target of the relation
 	TargetEntity string
 	MappedBy     string
-	IndexedBy      string
+	IndexedBy    string
 	Cascade
 	// Whether the related entities are loaded
 	// automatically or not.
@@ -97,6 +97,15 @@ func (meta Metadata) FindIdColumn() Column {
 		}
 	}
 	return column
+}
+
+func (meta Metadata) ResolveRelationForFieldName(fieldName string) (Relation, bool) {
+	for _, relation := range meta.Relations {
+		if relation.Field == fieldName {
+			return relation, true
+		}
+	}
+	return Relation{}, false
 }
 
 func (meta Metadata) ResolveColumnNameByFieldName(fieldName string) string {

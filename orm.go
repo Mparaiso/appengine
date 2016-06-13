@@ -28,6 +28,7 @@ func (orm ORM) GetTypeForMetadata(metadata Metadata) reflect.Type {
 	}
 	return nil
 }
+
 func (orm ORM) GetNameMetadata(entityName string) (Metadata, bool) {
 	entityName = strings.Trim(entityName, "\r\n\t ")
 	if entityName == "" {
@@ -78,12 +79,23 @@ func (orm *ORM) MustRegister(entities ...interface{}) {
 	}
 
 }
+
+// GetRepository resolves a repository from an entity or returns an error
 func (orm *ORM) GetRepository(entity Entity) (*Repository, error) {
 	Type := reflect.TypeOf(entity)
 	if _, ok := orm.metadatas[Type]; ok {
 		return NewRepository(Type, orm), nil
 	}
 	return nil, fmt.Errorf("Metadata not found for type %s .", Type)
+}
+
+// MustGetRepository gets a repository from an entity  or panics on error
+func (orm *ORM) MustGetRepository(entity Entity) *Repository {
+	r, err := orm.GetRepository(entity)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }
 
 // GetRepositoryByTableName gets a repository according to a table name.
