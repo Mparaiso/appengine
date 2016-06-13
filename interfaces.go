@@ -9,12 +9,23 @@ type MetadataProvider interface {
 type BeforeCreateListener interface {
 	BeforeCreate() error
 }
+
+type AfterCreateListener interface {
+	AfterCreate() error
+}
 type BeforeUpdateListener interface {
 	BeforeUpdate() error
 }
+type AfterUpdateListener interface {
+	AfterUpdate() error
+}
 
-type BeforeDestroyListener interface {
-	BeforeDestroy() error
+type BeforeRemoveListener interface {
+	BeforeRemove() error
+}
+
+type AfterRemoveListener interface {
+	AfterRemove() error
 }
 
 type RepositoryInterface interface {
