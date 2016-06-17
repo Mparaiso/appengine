@@ -33,6 +33,7 @@ type RepositoryInterface interface {
 	IDField() string
 	Type() reflect.Type
 	ORM() *ORM
+	Metadata() Metadata
 }
 
 type QueryBuilder interface {
