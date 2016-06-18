@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 // RelationType is an enum
@@ -151,4 +152,15 @@ func (meta Metadata) ResolveColumnNameFor(column Column) string {
 		return column.Field
 	}
 	return column.Name
+}
+
+func (meta Metadata) ResolveRelationForTargetEntity(entityName string) (Relation, bool) {
+	if strings.Trim(entityName, " \n\t\r") != "" {
+		for _, relation := range meta.Relations {
+			if entityName == relation.TargetEntity {
+				return relation, true
+			}
+		}
+	}
+	return Relation{}, false
 }
