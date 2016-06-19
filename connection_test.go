@@ -2,9 +2,12 @@ package orm_test
 
 import (
 	"database/sql"
+	"flag"
+	"os"
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mparaiso/go-orm"
 	"github.com/rubenv/sql-migrate"
@@ -121,16 +124,61 @@ func LoadFixtures(connection *orm.Connection) error {
 }
 
 func GetDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
+	driver, datasource, migrationDirectory := "sqlite3", ":memory:", "./testdata/migrations/development.sqlite3"
+	arguments := flag.Args()
+	for _, argument := range arguments {
+		switch argument {
+		case "mysql":
+			// go test ./... -v -run ConnectionGet -args mysql
+			driver, datasource, migrationDirectory = "mysql", "user@/test?parseTime=true", "./testdata/migrations/test.mysql"
+		}
+	}
+	t.Log("Using driver ", driver)
+	db, err := sql.Open(driver, datasource)
 	if err != nil {
 		t.Fatal(err)
 	}
 	migrations := &migrate.FileMigrationSource{
-		Dir: "./testdata/migrations/development.sqlite3",
+		Dir: migrationDirectory,
 	}
-	_, err = migrate.Exec(db, "sqlite3", migrations, migrate.Up)
+	_, err = migrate.Exec(db, driver, migrations, migrate.Up)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return db
+}
+
+func DropDB(t *testing.T) *sql.DB {
+	driver, datasource, migrationDirectory := "sqlite3", ":memory:", "./testdata/migrations/development.sqlite3"
+	arguments := flag.Args()
+	for _, argument := range arguments {
+		switch argument {
+		case "mysql":
+			// go test ./... -v -run ConnectionGet -args mysql
+			driver, datasource, migrationDirectory = "mysql", "user@/test?parseTime=true", "./testdata/migrations/test.mysql"
+
+		default:
+			return nil
+		}
+	}
+	t.Log("Using driver ", driver)
+	db, err := sql.Open(driver, datasource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrations := &migrate.FileMigrationSource{
+		Dir: migrationDirectory,
+	}
+	_, err = migrate.Exec(db, driver, migrations, migrate.Down)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	DropDB(new(testing.T))
+	os.Exit(code)
+
 }

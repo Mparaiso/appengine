@@ -6,9 +6,9 @@ func (n NotImplementedError) Error() string {
 	return string(n)
 }
 
-type EntityNotRegisiteredInORMError string
+type NotManaged string
 
-func (n EntityNotRegisiteredInORMError) Error() string {
+func (n NotManaged) Error() string {
 	return string(n)
 }
 

@@ -14,9 +14,10 @@ func (transaction *Transaction) Exec(query string, args ...interface{}) (sql.Res
 	return transaction.Tx.Exec(query, args...)
 }
 
-func (transaction *Transaction) RollBack() error {
-	defer transaction.log("Rollback Transaction.")
-	return transaction.Tx.Rollback()
+func (transaction *Transaction) Rollback() (err error) {
+	defer transaction.log("Rollback Transaction.", err)
+	err = transaction.Tx.Rollback()
+	return
 }
 
 func (transaction *Transaction) Commit() error {

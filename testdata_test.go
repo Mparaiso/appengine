@@ -33,6 +33,9 @@ func (Article) ProvideMetadata() Metadata {
 			{Field: "Updated"},
 			{Field: "AuthorID", Name: "author_id"},
 		},
+		Relations: []Relation{
+			{Type: ManyToOne, Field: "Author", InversedBy: "AuthorID", TargetEntity: "User"},
+		},
 	}
 }
 

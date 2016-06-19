@@ -9,7 +9,7 @@ CREATE TABLE userinfos(
 	display_name VARCHAR(250),
 	user_id INTEGER REFERENCES user(id) ON DELETE CASCADE
 );
-
+DELETE FROM userinfos;
 -- +migrate Down
 
 DROP TABLE user_infos;

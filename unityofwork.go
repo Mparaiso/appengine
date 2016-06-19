@@ -171,7 +171,7 @@ func (u *UnityOfWork) Flush(orm *ORM) error {
 			return err
 		}
 		metadata := orm.GetEntityMetadata(entity)
-		idColumn := metadata.ResolveColumnNameFor(metadata.FindIdColumn())
+		idColumn := metadata.FindIdColumn().Field
 		id := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).Interface()
 		query, values, err := Query{Type: DELETE,
 			Where:  []string{idColumn, "=", "?"},
@@ -205,14 +205,14 @@ func AfterPersist(entity Entity, orm *ORM) error {
 		return err
 	}
 	metadata := orm.GetEntityMetadata(entity)
-	entityID := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field).Int()
+	entityID := reflect.Indirect(reflect.ValueOf(entity)).FieldByName(metadata.FindIdColumn().Field)
 	for _, relation := range metadata.Relations {
 		if (relation.Cascade & Persist) != 0 {
 			if relation.Type == OneToOne {
 				entityValue := reflect.ValueOf(entity)
 				relatedEntityValue := reflect.Indirect(entityValue).FieldByName(relation.Field)
 				if !relatedEntityValue.IsNil() {
-					reflect.Indirect(relatedEntityValue).FieldByName(relation.IndexedBy).SetInt(entityID)
+					reflect.Indirect(relatedEntityValue).FieldByName(relation.IndexedBy).Set(entityID)
 				}
 			}
 		}

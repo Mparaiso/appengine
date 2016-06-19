@@ -18,12 +18,32 @@ const (
 	OneToMany
 )
 
+// String returns the name of the relation type as a string
+func (relation RelationType) String() string {
+	switch relation {
+	case ManyToOne:
+		return "ManyToOne"
+	case ManyToMany:
+		return "ManyToMany"
+	case OneToOne:
+		return "OneToOne"
+	case OneToMany:
+		return "OneToMany"
+	default:
+		return ""
+	}
+}
+
+// Cascade represents how related datas are handled
+// when then entity is persisted or removed
 type Cascade byte
 
 const (
+	// Persist automatically persists related entities when an entity is saves
 	Persist Cascade = 0x01
-	Remove  Cascade = 0x02
-	Merge   Cascade = 0x04
+	// Remove automatically removes related entities when an entity is removed
+	Remove Cascade = 0x02
+	// Merge   Cascade = 0x04
 )
 
 type Fetch int8
@@ -62,6 +82,8 @@ type Relation struct {
 	TargetEntity string
 	MappedBy     string
 	IndexedBy    string
+	// The InversedBy attribute designates the field in the entity that is the inverse side of the relationship.
+	InversedBy string
 	Cascade
 	// Whether the related entities are loaded
 	// automatically or not.
@@ -89,6 +111,10 @@ func MetadataFrom(jsonString string) (Metadata, error) {
 	return meta, err
 }
 
+// TableName returns the name of the table associated with the entity
+func (meta Metadata) TableName() string {
+	return strings.ToLower(meta.Table.Name)
+}
 func (meta Metadata) FindIdColumn() Column {
 	var column Column
 	for _, value := range meta.Columns {
@@ -121,7 +147,7 @@ func (meta Metadata) ResolveColumnNameByFieldName(fieldName string) string {
 			break
 		}
 	}
-	return columnName
+	return strings.ToLower(columnName)
 }
 
 func (meta Metadata) BuildFieldValueMap(entity interface{}) (map[string]interface{}, error) {
@@ -147,11 +173,13 @@ func (meta Metadata) FieldMap(entity interface{}) (fieldMap map[string]reflect.V
 	return
 }
 
-func (meta Metadata) ResolveColumnNameFor(column Column) string {
+func (meta Metadata) ResolveColumnNameFor(column Column) (name string) {
 	if column.Name == "" {
-		return column.Field
+		name = column.Field
+	} else {
+		name = column.Name
 	}
-	return column.Name
+	return strings.ToLower(name)
 }
 
 func (meta Metadata) ResolveRelationForTargetEntity(entityName string) (Relation, bool) {

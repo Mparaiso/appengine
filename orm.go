@@ -29,7 +29,7 @@ func (orm ORM) GetTypeForMetadata(metadata Metadata) reflect.Type {
 	return nil
 }
 
-func (orm ORM) GetNameMetadata(entityName string) (Metadata, bool) {
+func (orm ORM) GetMetadataByEntityName(entityName string) (Metadata, bool) {
 	entityName = strings.Trim(entityName, "\r\n\t ")
 	if entityName == "" {
 		return Metadata{}, false

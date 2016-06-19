@@ -34,6 +34,10 @@ const (
 	SUM     aggregateType = "SUM"
 )
 
+type Join struct {
+	TargetEntity string
+}
+
 // Aggregate describes an aggregate operation like COUNT, SUM, MIN, MAX, AVG
 type Aggregate struct {
 	Type aggregateType
@@ -53,7 +57,7 @@ type Query struct {
 	Where      []string
 	Params     []interface{}
 	OrderBy    map[string]Order
-	Join       []string
+	Join       []Join
 	Limit      int64
 	Offset     int64
 	Aggregates []Aggregate
@@ -72,6 +76,30 @@ func (query Query) BuildQuery(repository RepositoryInterface) (string, []interfa
 
 	case SELECT:
 		fromStatement := query.buildFromStatement(repository)
+		joinStatement := ""
+		for _, join := range query.Join {
+			relation, resolved := repository.Metadata().ResolveRelationForTargetEntity(join.TargetEntity)
+			if !resolved {
+				return "", []interface{}{}, fmt.Errorf("Unresloved relation in join %v, with entity %s", join, join.TargetEntity)
+			}
+			targetMetadata, found := repository.ORM().GetMetadataByEntityName(join.TargetEntity)
+			if !found {
+				return "", []interface{}{}, fmt.Errorf("No metadata found for '%s'", join.TargetEntity)
+			}
+			var joinTableName, joinColumn, entityTableName, entityColumn string
+			switch relation.Type {
+			case ManyToOne:
+				joinTableName = targetMetadata.TableName()
+				joinColumn = targetMetadata.ResolveColumnNameFor(targetMetadata.FindIdColumn())
+				entityTableName = repository.TableName()
+				entityColumn = repository.Metadata().ResolveColumnNameByFieldName(relation.InversedBy)
+			default:
+				return "", []interface{}{}, fmt.Errorf("Relation of '%s' type '%s' for entity '%' is not handled in join statement", relation.Field, relation.Type, repository.Metadata().Entity)
+			}
+
+			joinStatement += "JOIN " + joinTableName + " ON " + joinTableName +
+				"." + joinColumn + " = " + entityTableName + "." + entityColumn + " "
+		}
 		whereStatement, values, err := query.buildWhereStatement(repository)
 		if err != nil {
 			return "", values, err
@@ -86,7 +114,7 @@ func (query Query) BuildQuery(repository RepositoryInterface) (string, []interfa
 		}
 		limitStatement := query.buildLimitStatement(repository)
 		offsetStatement := query.buildOffsetStatement(repository)
-		q := []string{selectStatement, fromStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
+		q := []string{selectStatement, fromStatement, joinStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
 		return strings.Join(q, ""), values, nil
 
 	case UPDATE:
@@ -130,7 +158,7 @@ func (query Query) buildInsertStatment(repository RepositoryInterface) (string, 
 			if column == "" {
 				return "", values, fmt.Errorf("No Column found for Field %s in Set for INSERT query", key)
 			}
-			columns = append(columns, strings.ToLower(column))
+			columns = append(columns, column)
 			values = append(values, value)
 		}
 	}
@@ -148,12 +176,12 @@ func (query Query) buildUpdateStatement(repository RepositoryInterface) (string,
 	metadata := repository.ORM().GetTypeMetadata(repository.Type())
 	fieldMap := query.Set
 	for key, value := range fieldMap {
-		columnName := strings.ToLower(metadata.ResolveColumnNameByFieldName(key))
+		columnName := metadata.ResolveColumnNameByFieldName(key)
 		setStatement = fmt.Sprintf("%s %s = ? ,", setStatement, columnName)
 		values = append(values, value)
 	}
 	setStatement = strings.TrimLeft(strings.TrimSuffix(setStatement, " ,"), " ")
-	updateStatement := fmt.Sprintf("UPDATE %s SET %s", metadata.Table.Name, setStatement)
+	updateStatement := fmt.Sprintf("UPDATE %s SET %s", metadata.TableName(), setStatement)
 	return updateStatement, values
 }
 
@@ -182,9 +210,9 @@ func (query Query) buildOrderByStatment(repository RepositoryInterface) (string,
 				return "", fmt.Errorf("No column found for field %s in OrderBy Query Part.", columnName)
 			}
 			if orderByStatement == "" {
-				orderByStatement = fmt.Sprintf("%s %s", strings.ToLower(columnName), value)
+				orderByStatement = fmt.Sprintf("%s %s", columnName, value)
 			} else {
-				orderByStatement = fmt.Sprintf("%s , %s %s ", orderByStatement, strings.ToLower(columnName), value)
+				orderByStatement = fmt.Sprintf("%s , %s %s ", orderByStatement, columnName, value)
 			}
 		}
 		return " ORDER BY " + orderByStatement, nil
@@ -217,14 +245,15 @@ func (query Query) buildSelectStatement(repository RepositoryInterface) (string,
 }
 
 func (query Query) buildFromStatement(repository RepositoryInterface) string {
-	return fmt.Sprintf(" FROM %s ", repository.TableName())
+	return fmt.Sprintf("FROM %s ", repository.TableName())
 }
 
 func (query Query) buildWhereStatement(repository RepositoryInterface) (string, []interface{}, error) {
+	// values to be added as query parameters
 	values := []interface{}{}
-	metadata := repository.ORM().GetTypeMetadata(repository.Type())
-	if query.Where != nil {
-		if query.Params != nil {
+	metadata := repository.Metadata()
+	if len(query.Where) > 0 {
+		if len(query.Params) > 0 {
 			values = append(values, query.Params...)
 		}
 		paramNumber := 0
@@ -233,22 +262,39 @@ func (query Query) buildWhereStatement(repository RepositoryInterface) (string, 
 			case "?":
 				paramNumber = paramNumber + 1
 			case "=", "<", "<=", ">", ">=", "<>", "!=", "IN", "NOT IN", "NOT LIKE", "LIKE":
+				var columnName, tableName string
 				if index == 0 {
 					return "", nil, fmt.Errorf("Unexpected token %s at index %d in Query.Where", token, index)
 				}
 				fieldName := query.Where[index-1]
-				columnName := metadata.ResolveColumnNameByFieldName(fieldName)
-				if columnName == "" {
-					return "", nil, fmt.Errorf("No column found for field %s in Where Query Part.", fieldName)
+				// if the field name like "Entity.Field"
+				if fieldParts := strings.Split(fieldName, "."); len(fieldParts) > 1 {
+					entityName, fieldName := fieldParts[0], fieldParts[1]
+					metadata, found := repository.ORM().GetMetadataByEntityName(entityName)
+					if !found {
+						return "", nil, fmt.Errorf("Entity '%s' not found for field '%s' in Where Query Part", entityName, fieldName)
+					}
+					tableName = metadata.TableName()
+					columnName = metadata.ResolveColumnNameByFieldName(fieldName)
+					if columnName == "" {
+						return "", nil, fmt.Errorf("No column found for field '%s' in Entity '%s' in Where Query Part.", fieldName, entityName)
+					}
+				} else {
+					// the fieldname is like "field"
+					columnName = metadata.ResolveColumnNameByFieldName(fieldName)
+					tableName = metadata.TableName()
+					if columnName == "" {
+						return "", nil, fmt.Errorf("No column found for field '%s' in entity '%s' in Where Query Part.", fieldName, tableName)
+					}
 				}
-				query.Where[index-1] = metadata.Table.Name + "." + strings.ToLower(columnName)
+				query.Where[index-1] = tableName + "." + columnName
 			}
 
 		}
 		if paramNumber != len(values) {
 			return "", nil, fmt.Errorf("Not enough ? placeholders for params %v in %s ", values, query.Where)
 		}
-		return " WHERE " + strings.Join(query.Where, " "), values, nil
+		return "WHERE " + strings.Join(query.Where, " "), values, nil
 	}
 	return "", values, nil
 }
@@ -265,11 +311,7 @@ func buildSelectFieldListFromColumnMetadata(metadata Metadata, fieldNameSelector
 			return "", nil
 		}
 		if (len(fieldNameSelector) > 0 && indexOfString(fieldNameSelector, column.Field) >= 0) || len(fieldNameSelector) == 0 {
-			if column.Name == "" {
-				fields = fields + metadata.Table.Name + "." + strings.ToLower(column.Field) + " AS " + column.Field + ","
-			} else {
-				fields = fields + metadata.Table.Name + "." + column.Name + " AS " + column.Field + ","
-			}
+			fields = fields + metadata.TableName() + "." + metadata.ResolveColumnNameByFieldName(column.Field) + " AS " + column.Field + ","
 		}
 	}
 	// we remove the last comma in the string

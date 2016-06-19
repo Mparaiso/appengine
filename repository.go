@@ -20,6 +20,7 @@ type Collection interface{}
 // Repository is a repository of entities of the same type
 type Repository struct {
 	Connection *Connection
+	metadata   Metadata
 	idField    string
 	tableName  string
 	aType      reflect.Type
@@ -46,9 +47,13 @@ func (repository *Repository) ORM() *ORM {
 	return repository.orm
 }
 
+func (repository *Repository) Metadata() Metadata {
+	return repository.metadata
+}
+
 // NewRepository creates a new repository
-func NewRepository(Type reflect.Type, datamapper *ORM) *Repository {
-	metadata, ok := datamapper.metadatas[Type]
+func NewRepository(Type reflect.Type, orm *ORM) *Repository {
+	metadata, ok := orm.metadatas[Type]
 	if !ok {
 		log.Fatalf("Datamapper cannot manage type %s", Type)
 	}
@@ -56,7 +61,7 @@ func NewRepository(Type reflect.Type, datamapper *ORM) *Repository {
 	if idField == "" {
 		idField = metadata.FindIdColumn().Field
 	}
-	return &Repository{datamapper.Connection(), idField, metadata.Table.Name, Type, datamapper}
+	return &Repository{orm.Connection(), metadata, idField, metadata.Table.Name, Type, orm}
 }
 
 // All finds all
