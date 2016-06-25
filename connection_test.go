@@ -130,6 +130,7 @@ func GetDB(t *testing.T) *sql.DB {
 		switch argument {
 		case "mysql":
 			// go test ./... -v -run ConnectionGet -args mysql
+			// https://github.com/go-sql-driver/mysql#examples
 			driver, datasource, migrationDirectory = "mysql", "user@/test?parseTime=true", "./testdata/migrations/test.mysql"
 		}
 	}
