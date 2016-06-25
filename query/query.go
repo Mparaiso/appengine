@@ -46,8 +46,8 @@ type Join struct {
 
 // Aggregate describes an aggregate operation like COUNT, SUM, MIN, MAX, AVG
 type Aggregate struct {
-	Type  aggregateType
-	Alias string
+	Type aggregateType
+	As   string
 	// StructField is the struct field that should be populated with the result of the aggregate
 	Column string
 	// Separator used by GROUP_CONCAT
@@ -95,26 +95,37 @@ func (query Query) BuildQuery() (string, []interface{}, error) {
 	switch query.Type {
 
 	case SELECT:
+		values := []interface{}{}
+		selectStatement, err := query.buildSelectStatement()
+		if err != nil {
+			return "", values, err
+		}
 		fromStatement := query.buildFromStatement()
 		joinStatement := ""
 		for _, join := range query.Join {
 			joinStatement += "JOIN " + join.Table + " ON " + join.On + " "
 		}
+
 		whereStatement, values, err := query.buildWhereStatement()
 		if err != nil {
 			return "", values, err
 		}
-		selectStatement, err := query.buildSelectStatement()
-		if err != nil {
-			return "", values, err
+		groupByStatement := ""
+		for i, group := range query.GroupBy {
+			if i == 0 {
+				groupByStatement += " GROUP BY"
+			}
+			groupByStatement += " " + group + " ,"
 		}
+		groupByStatement = strings.TrimRight(groupByStatement, " ,")
 		orderByStatement, err := query.buildOrderByStatment()
 		if err != nil {
 			return "", values, err
 		}
 		limitStatement := query.buildLimitStatement()
 		offsetStatement := query.buildOffsetStatement()
-		q := []string{selectStatement, fromStatement, joinStatement, whereStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
+
+		q := []string{selectStatement, fromStatement, joinStatement, whereStatement, groupByStatement, orderByStatement, limitStatement, offsetStatement, " ;"}
 		return strings.Join(q, ""), values, nil
 
 	case UPDATE:
@@ -211,7 +222,10 @@ func (query Query) buildSelectStatement() (string, error) {
 	// Create aggregation statements ( like "COUNT(TABLE.COLUMN1) AS ALIAS" )
 	if len(query.Aggregates) > 0 {
 		for _, aggregate := range query.Aggregates {
-			buildFromStatement = buildFromStatement + " " + string(aggregate.Type) + "(" + aggregate.Column + ") AS " + aggregate.Alias
+			buildFromStatement = buildFromStatement + string(aggregate.Type) + "(" + aggregate.Column + ") "
+			if aggregate.As != "" {
+				buildFromStatement += "AS " + aggregate.As
+			}
 		}
 		if fieldListStatement != "" {
 			buildFromStatement = buildFromStatement + ", "

@@ -5,6 +5,7 @@ import(
 )
 // A basic SELECT statement
 func ExampleQuery_BuildQuery(){
+
 	result,values,err:=Query{From:[]string{"articles"}}.BuildQuery()
 
 	fmt.Println(err)
@@ -16,9 +17,11 @@ func ExampleQuery_BuildQuery(){
 	// SELECT * FROM articles  ;
 	// []
 }
-// A SELECT statement with columns and aliases and a WHERE statement with parameters
+// A SELECT statement with columns and aliASes and a WHERE statement with parameters
 func ExampleQuery_BuildQuery_second(){
-	result,values,err  := Query{Select:[]string{"a.title as Title","a.created_at as CreatedAt"},
+
+	result,values,err  := Query{
+		Select:[]string{"a.title AS Title","a.created_at AS CreatedAt"},
 		From:[]string{"articles a"},
 		Where:[]string{"a.published","=","?"},
 		Params:[]interface{}{true},
@@ -30,12 +33,15 @@ func ExampleQuery_BuildQuery_second(){
 	
 	// Output:
 	// <nil>
-	// SELECT a.title as Title,a.created_at as CreatedAt FROM articles a WHERE a.published = ? ;
+	// SELECT a.title AS Title,a.created_at AS CreatedAt FROM articles a WHERE a.published = ? ;
 	// [true]
 }
 
+// A SELECT statement WITH A JOIN statement
 func ExampleQuery_BuildQuery_third(){
-	result,values,err:=Query{Select:[]string{"a.title as Title"},
+
+	result,values,err:=Query{
+		Select:[]string{"a.title AS Title"},
 		From:[]string{"articles a"},
 		Join:[]Join{{Table:"users u",On:"a.author_id = user.id"}},
 		Where:[]string{"u.id","=","?"},
@@ -48,6 +54,29 @@ func ExampleQuery_BuildQuery_third(){
 
 	// Output:
 	// <nil>
-	// SELECT a.title as Title FROM articles a JOIN users u ON a.author_id = user.id WHERE u.id = ? ;
+	// SELECT a.title AS Title FROM articles a JOIN users u ON a.author_id = user.id WHERE u.id = ? ;
 	// [1]
+}
+
+// A select statement with aggregation
+func ExampleQuery_BuildQuery_fourth(){
+	results,values,err:=Query{
+		Select:[]string{"u.id AS ID"},
+		From:[]string{"users u"},
+		Join:[]Join{{Table:"followers f",On:"f.followee_id = u.id"}},
+		Aggregates:[]Aggregate{{Type:COUNT,Column:"f.followee_id",As:"FollowerCount"}},
+		GroupBy:[]string{"u.id"},
+		Where:[]string{"u.id","=","?"},
+		Params:[]interface{}{10},
+	}.BuildQuery()
+
+	fmt.Println(err)
+	fmt.Println(results)
+	fmt.Println(values)
+
+	// Output:
+	// <nil>
+	// SELECT COUNT(f.followee_id) AS FollowerCount, u.id AS ID FROM users u JOIN followers f ON f.followee_id = u.id WHERE u.id = ? GROUP BY u.id ;
+	// [10]
+
 }
