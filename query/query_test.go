@@ -59,7 +59,7 @@ func ExampleQuery_BuildQuery_third(){
 }
 
 // A select statement with aggregation
-func ExampleQuery_BuildQuery_selection_with_join_and_group_by(){
+func ExampleQuery_BuildQuery_fourth(){
 	results,values,err:=Query{
 		Select:[]string{"u.id AS ID"},
 		From:[]string{"users u"},
