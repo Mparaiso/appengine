@@ -57,7 +57,7 @@ type Aggregate struct {
 // Query implements QueryBuilder.
 // It can be used to filter entities when they are fetched
 // from the database.
-type Query struct {
+type Builder struct {
 	Type       Type
 	From       []string
 	Select     []string
@@ -75,14 +75,19 @@ type Query struct {
 	Set        map[string]interface{}
 }
 
+// NewQueryBuilder creates a new query builder
+func NewQueryBuilder() *Builder {
+	return &Builder{}
+}
+
 // GetType return the type of the query
-func (query Query) GetType() Type {
+func (query Builder) GetType() Type {
 	return query.Type
 }
 
 // BuildQuery builds the querystring with placeholders , returns it with the parameters
 // to replace the placeholders and an error.
-func (query Query) BuildQuery() (string, []interface{}, error) {
+func (query Builder) BuildQuery() (string, []interface{}, error) {
 	if query.Update != "" {
 		query.Type = UPDATE
 	} else if query.Delete != "" {
@@ -139,7 +144,8 @@ func (query Query) BuildQuery() (string, []interface{}, error) {
 		return q, values, nil
 
 	case DELETE:
-		deleteStatement := fmt.Sprintf("DELETE FROM %s ", query.From)
+
+		deleteStatement := fmt.Sprintf("DELETE FROM %s ", strings.Join(query.From, ","))
 		whereStatement, values, err := query.buildWhereStatement()
 		if err != nil {
 			return "", values, err
@@ -157,7 +163,7 @@ func (query Query) BuildQuery() (string, []interface{}, error) {
 
 }
 
-func (query Query) buildInsertStatment() (string, []interface{}, error) {
+func (query Builder) buildInsertStatment() (string, []interface{}, error) {
 	values := []interface{}{}
 	columns := []string{}
 
@@ -174,7 +180,7 @@ func (query Query) buildInsertStatment() (string, []interface{}, error) {
 	return q, values, nil
 }
 
-func (query Query) buildUpdateStatement() (string, []interface{}) {
+func (query Builder) buildUpdateStatement() (string, []interface{}) {
 	setStatement := ""
 	values := []interface{}{}
 	fieldMap := query.Set
@@ -187,21 +193,21 @@ func (query Query) buildUpdateStatement() (string, []interface{}) {
 	return updateStatement, values
 }
 
-func (query Query) buildLimitStatement() string {
+func (query Builder) buildLimitStatement() string {
 	if query.Limit != 0 {
 		return fmt.Sprintf(" LIMIT %d ", query.Limit)
 	}
 	return ""
 }
 
-func (query Query) buildOffsetStatement() string {
+func (query Builder) buildOffsetStatement() string {
 	if query.Offset != 0 {
 		return fmt.Sprintf(" OFFSET %d ", query.Offset)
 	}
 	return ""
 }
 
-func (query Query) buildOrderByStatment() (string, error) {
+func (query Builder) buildOrderByStatment() (string, error) {
 	orderByStatement := ""
 	if query.OrderBy != nil {
 		for key, value := range query.OrderBy {
@@ -216,7 +222,7 @@ func (query Query) buildOrderByStatment() (string, error) {
 	return "", nil
 }
 
-func (query Query) buildSelectStatement() (string, error) {
+func (query Builder) buildSelectStatement() (string, error) {
 	buildFromStatement := ""
 	fieldListStatement := strings.Join(query.Select, ",")
 	// Create aggregation statements ( like "COUNT(TABLE.COLUMN1) AS ALIAS" )
@@ -234,11 +240,11 @@ func (query Query) buildSelectStatement() (string, error) {
 	return fmt.Sprintf("SELECT %s%s ", buildFromStatement, fieldListStatement), nil
 }
 
-func (query Query) buildFromStatement() string {
+func (query Builder) buildFromStatement() string {
 	return fmt.Sprintf("FROM %s ", strings.Join(query.From, ","))
 }
 
-func (query Query) buildWhereStatement() (string, []interface{}, error) {
+func (query Builder) buildWhereStatement() (string, []interface{}, error) {
 	// values to be added as query parameters
 	values := []interface{}{}
 	if len(query.Where) > 0 {
