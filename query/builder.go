@@ -57,6 +57,7 @@ type Aggregate struct {
 // Query implements QueryBuilder.
 // It can be used to filter entities when they are fetched
 // from the database.
+// TODO: add support for specific SQL variations
 type Builder struct {
 	Type       Type
 	From       []string
