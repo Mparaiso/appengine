@@ -189,7 +189,7 @@ func (query Builder) buildUpdateStatement() (string, []interface{}) {
 		values = append(values, value)
 	}
 	setStatement = strings.TrimLeft(strings.TrimSuffix(setStatement, " ,"), " ")
-	updateStatement := fmt.Sprintf("UPDATE %s SET %s", query.Update, setStatement)
+	updateStatement := fmt.Sprintf("UPDATE %s SET %s ", query.Update, setStatement)
 	return updateStatement, values
 }
 

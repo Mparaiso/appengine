@@ -102,3 +102,45 @@ func ExampleBuilder_BuildQuery_fifth() {
 	// DELETE FROM articles WHERE articles.author_id = ?;
 	// [<nil>]
 }
+
+// An example of an UPDATE statement
+func ExampleBuilder_BuildQuery_sixth(){
+	query,values,err:=Builder{
+		Update:"articles",
+		Set:map[string]interface{}{
+			"title":"the title",
+		},
+		Where:[]string{
+			"articles.id","=","?",
+		},
+		Params:[]interface{}{1},
+	}.BuildQuery()
+
+	fmt.Println(err)
+	fmt.Println(query)
+	fmt.Println(values)
+
+	// Output:
+	// <nil>
+	// UPDATE articles SET title = ? WHERE articles.id = ?;
+	// [the title 1]
+}
+
+//An example of an INSERT statement
+func ExampleBuilder_BuildQuery_seventh(){
+	query,values,err:=Builder{
+		Insert:"articles",
+		Set:map[string]interface{}{
+			"title":"new title",
+		},
+	}.BuildQuery()
+
+	fmt.Println(err)
+	fmt.Println(query)
+	fmt.Println(values)
+
+	// Output:
+	// <nil>
+	// INSERT INTO articles(title) VALUES(?);
+	// [new title]
+}
