@@ -77,7 +77,7 @@ type Builder struct {
 }
 
 // NewQueryBuilder creates a new query builder
-func NewQueryBuilder() *Builder {
+func NewBuilder() *Builder {
 	return &Builder{}
 }
 
