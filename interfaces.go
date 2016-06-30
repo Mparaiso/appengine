@@ -36,7 +36,7 @@ type RepositoryInterface interface {
 	Metadata() Metadata
 }
 
-type QueryBuilder interface {
+type QueryBuilderInterface interface {
 	GetType() QueryType
 	BuildQuery(RepositoryInterface) (string, []interface{}, error)
 }
