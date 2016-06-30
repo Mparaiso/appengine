@@ -76,7 +76,7 @@ func (repository *Repository) Find(id Any, entity Entity) error {
 
 // FindOneBy finds one entity filtered by a query and resolve s
 // relations defined in that entity
-func (repository *Repository) FindOneBy(query QueryBuilder, entity Entity) error {
+func (repository *Repository) FindOneBy(query Query, entity Entity) error {
 	err := repository.doFindOneBy(query, entity)
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func (repository *Repository) FindOneBy(query QueryBuilder, entity Entity) error
 }
 
 // FindBy find entities according to a query
-func (repository *Repository) FindBy(query QueryBuilder, collection Collection) error {
+func (repository *Repository) FindBy(query Query, collection Collection) error {
 	err := repository.doFindBy(query, collection)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (repository *Repository) FindBy(query QueryBuilder, collection Collection) 
 }
 
 // Execute statement
-func (repository *Repository) Execute(query QueryBuilder) (sql.Result, error) {
+func (repository *Repository) Execute(query Query) (sql.Result, error) {
 	q, params, err := query.BuildQuery(repository)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (repository *Repository) DeleteAll() error {
 }
 
 // doFindBy finds entities without fetching related entities
-func (repository *Repository) doFindBy(query QueryBuilder, collection Collection) error {
+func (repository *Repository) doFindBy(query Query, collection Collection) error {
 	queryString, values, err := query.BuildQuery(repository)
 	if err != nil {
 		return err
@@ -174,7 +174,7 @@ func (repository *Repository) doFindBy(query QueryBuilder, collection Collection
 }
 
 // doFindOneBy doesn't resolve relations between entities
-func (repository *Repository) doFindOneBy(query QueryBuilder, entity Entity) error {
+func (repository *Repository) doFindOneBy(query Query, entity Entity) error {
 	queryString, values, err := query.BuildQuery(repository)
 	if err != nil {
 		return err
