@@ -1,11 +1,11 @@
-#ORM
+#appengine
 
-[![Build Status](https://travis-ci.org/Mparaiso/go-orm.svg?branch=master)](https://travis-ci.org/Mparaiso/go-orm)
+[![Build Status](https://travis-ci.org/Mparaiso/appengine.svg?branch=master)](https://travis-ci.org/Mparaiso/appengine)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/Mparaiso/go-orm)](https://goreportcard.com/report/github.com/Mparaiso/go-orm)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Mparaiso/appengine)](https://goreportcard.com/report/github.com/Mparaiso/appengine)
 
 
 
 Status: Alpha, Work in progress
 
-This library will take heavy inspiration on Doctrine ORM and Laravel.
+This library is a collection of utilities for appengine.
