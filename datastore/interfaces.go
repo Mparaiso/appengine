@@ -18,8 +18,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Mparaiso/go-tiger/validator"
-
 	"golang.org/x/net/context"
 )
 
@@ -74,12 +72,4 @@ type RepositoryProvider interface {
 
 type SignalProvider interface {
 	GetSignal() Signal
-}
-
-type UniqueEntityValidatorProvider interface {
-	UniqueEntityValidator(field string, values map[string]interface{}, errors validator.Error)
-}
-
-type ExistingEntityValidatorProvider interface {
-	ExistingEntityValidator(field string, entityName string, values map[string]interface{}, errors validator.Error)
 }
