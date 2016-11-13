@@ -8,4 +8,9 @@
 
 Status: Alpha, Work in progress
 
-This library is a collection of utilities for appengine.
+This library is a collection of utilities for appengine standard environment development.
+
+Features :
+
+ - [x] Datastore repositories
+ - [x] Datastore entity rest end point for writing quick APIS

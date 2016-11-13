@@ -4,20 +4,34 @@ import (
 	"fmt"
 
 	"github.com/Mparaiso/appengine/datastore"
-	"github.com/Mparaiso/go-tiger/validator"
 )
+
+// ValidationError allows to collect
+// multiple errors from different validators.
+// This interface was ripped out of github.com/Mparaiso/go-tiger/validator
+// and made independant
+type ValidationError interface {
+	// Append a new error to the errors map
+	Append(key, value string)
+}
 
 // UniqueEntityValidator is valid when the validated entity is unique
 type UniqueEntityValidator struct {
 	datastore.Repository
 }
 
-func newUniqueEntityValidator(repository datastore.Repository) *UniqueEntityValidator {
+// NewUniqueEntityValidator creates a new UniqueEntityValidator
+func NewUniqueEntityValidator(repository datastore.Repository) *UniqueEntityValidator {
 	return &UniqueEntityValidator{repository}
 }
 
 // Validate does validate, values are used to find a potential dupblicate
-func (provider UniqueEntityValidator) Validate(field string, values map[string]interface{}, errors validator.ValidationError) {
+// example :
+//
+//		validation.Validate("Username",map[string]interface{}{"Username":user.Username},errors)
+//
+// will add an error to errors if another entity in the datastore has the same Username field value
+func (provider UniqueEntityValidator) Validate(field string, values map[string]interface{}, errors ValidationError) {
 	query := map[string]interface{}{}
 	for key, value := range values {
 		query[key+"="] = value
@@ -29,7 +43,7 @@ func (provider UniqueEntityValidator) Validate(field string, values map[string]i
 
 	}
 	if count != 0 {
-		errors.Append(field, "Should be unique")
+		errors.Append(field, "is already taken.")
 	}
 
 }
@@ -46,7 +60,7 @@ func NewEntityExistsValidator(repository datastore.Repository) *EntityExistsVali
 }
 
 // Validate does validate
-func (provider EntityExistsValidator) Validate(field string, kind string, values map[string]interface{}, errors validator.ValidationError) {
+func (provider EntityExistsValidator) Validate(field string, kind string, values map[string]interface{}, errors ValidationError) {
 	query := map[string]interface{}{}
 	for key, value := range values {
 		query[key+"="] = value
