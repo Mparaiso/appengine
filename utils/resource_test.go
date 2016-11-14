@@ -127,6 +127,11 @@ func SubTestEndPointDelete(t *testing.T, instance aetest.Instance, resource *uti
 	test.Fatal(t, err, nil)
 	resource.Delete(response, request)
 	test.Fatal(t, response.Code, 200)
+	response = httptest.NewRecorder()
+	request, err = instance.NewRequest("GET", fmt.Sprintf("/?:users=%d", ID), nil)
+	test.Fatal(t, err, nil)
+	resource.Delete(response, request)
+	test.Fatal(t, response.Code, 404)
 
 }
 
