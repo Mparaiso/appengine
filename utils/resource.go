@@ -31,11 +31,10 @@ type CreatedMessage struct {
 	ID      int64
 }
 
-// EndPoint is a reusable rest endpoint
-type EndPoint struct {
+// Resource is a reusable rest endpoint
+type Resource struct {
 	// Prototype is a value used to create other values
-	// DO NOT PASS A POINTER BUT THE TYPE DIRECTLY
-	Prototype interface{}
+	Prototype datastore.Entity
 	protoType reflect.Type
 	// the datastore kind
 	Kind          string
@@ -44,18 +43,18 @@ type EndPoint struct {
 	ErrorFunction func(writer http.ResponseWriter, Error error, status int)
 }
 
-// NewEndPoint creates a new EndPoint
-func NewEndPoint(prototype datastore.Entity, Kind string) *EndPoint {
-	return &EndPoint{Prototype: prototype, Kind: Kind}
+// NewResource creates a new EndPoint
+func NewResource(prototype datastore.Entity, Kind string) *Resource {
+	return &Resource{Prototype: prototype, Kind: Kind}
 }
 
 // GetKind returns the endpoint's kind
-func (e *EndPoint) GetKind() string {
+func (e *Resource) GetKind() string {
 	return e.Kind
 }
 
 // GetErrorFunction returns the function used to manage errors
-func (e *EndPoint) GetErrorFunction() func(http.ResponseWriter, error, int) {
+func (e *Resource) GetErrorFunction() func(http.ResponseWriter, error, int) {
 	if e.ErrorFunction == nil {
 		e.ErrorFunction = func(w http.ResponseWriter, err error, status int) { http.Error(w, err.Error(), status) }
 	}
@@ -63,7 +62,7 @@ func (e *EndPoint) GetErrorFunction() func(http.ResponseWriter, error, int) {
 }
 
 // GetPrototype returns e.Prototype
-func (e *EndPoint) GetPrototype() reflect.Type {
+func (e *Resource) GetPrototype() reflect.Type {
 	if e.protoType == nil {
 		e.protoType = reflect.Indirect(reflect.ValueOf(e.Prototype)).Type()
 	}
@@ -71,7 +70,7 @@ func (e *EndPoint) GetPrototype() reflect.Type {
 }
 
 // Index list resources
-func (e EndPoint) Index(w http.ResponseWriter, r *http.Request) {
+func (e Resource) Index(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
 	entities := reflect.New(reflect.SliceOf(e.GetPrototype())).Interface()
@@ -87,7 +86,7 @@ func (e EndPoint) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSignal returns a signal dispatcher
-func (e *EndPoint) GetSignal() datastore.Signal {
+func (e *Resource) GetSignal() datastore.Signal {
 	if e.Signal == nil {
 		e.Signal = datastore.NewDefaultSignal()
 	}
@@ -95,7 +94,7 @@ func (e *EndPoint) GetSignal() datastore.Signal {
 }
 
 // Get fetches a resource
-func (e EndPoint) Get(w http.ResponseWriter, r *http.Request) {
+func (e Resource) Get(w http.ResponseWriter, r *http.Request) {
 
 	var id int64
 	_, err := fmt.Sscanf(r.URL.Query().Get(":"+e.Kind), "%d", &id)
@@ -107,7 +106,10 @@ func (e EndPoint) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
 	err = repository.FindByID(id, entity.(datastore.Entity))
-	if err != nil {
+	if err == datastore.ErrNoSuchEntity {
+		e.GetErrorFunction()(w, err, http.StatusNotFound)
+		return
+	} else if err != nil {
 		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -118,7 +120,7 @@ func (e EndPoint) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Put updates a resource
-func (e EndPoint) Put(w http.ResponseWriter, r *http.Request) {
+func (e Resource) Put(w http.ResponseWriter, r *http.Request) {
 	entity := reflect.New(e.GetPrototype()).Interface()
 	var id int64
 	_, err := fmt.Sscanf(r.URL.Query().Get(":"+e.Kind), "%d", &id)
@@ -138,7 +140,7 @@ func (e EndPoint) Put(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete deletes a resource
-func (e EndPoint) Delete(w http.ResponseWriter, r *http.Request) {
+func (e Resource) Delete(w http.ResponseWriter, r *http.Request) {
 
 	entity := reflect.New(e.GetPrototype()).Interface()
 	var id int64
@@ -162,7 +164,7 @@ func (e EndPoint) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Post creates a resource
-func (e EndPoint) Post(w http.ResponseWriter, r *http.Request) {
+func (e Resource) Post(w http.ResponseWriter, r *http.Request) {
 	entity := reflect.New(e.GetPrototype()).Interface()
 
 	decoder := json.NewDecoder(r.Body)
