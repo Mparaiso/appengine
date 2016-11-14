@@ -7,8 +7,8 @@
   ],
   "script": [
     "go version",
-    "go get -v -t -d ./...",
-    "\"$HOME/sdk/go_appengine/goapp\" test -v ./...",
-    "go test -v -race ./..."
+    "go get  -t -d ./...",
+    "\"$HOME/sdk/go_appengine/goapp\" test  ./...",
+    "go test  -race ./..."
   ]
 }
