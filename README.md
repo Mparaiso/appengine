@@ -6,9 +6,11 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Mparaiso/appengine)](https://goreportcard.com/report/github.com/Mparaiso/appengine)
 
+author: mparaiso <mparaiso@online.fr>
 
+license: APACHE 2.0
 
-Status: Alpha, Work in progress
+Status: Alpha, Work in progress !
 
 This library is a collection of utilities for appengine standard environment development.
 
