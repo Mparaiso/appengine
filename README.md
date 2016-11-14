@@ -1,5 +1,7 @@
 #appengine
 
+[![GoDoc](https://godoc.org/github.com/Mparaiso/appengine?status.png)](https://godoc.org/github.com/Mparaiso/appengine)
+
 [![Build Status](https://travis-ci.org/Mparaiso/appengine.svg?branch=master)](https://travis-ci.org/Mparaiso/appengine)
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Mparaiso/appengine)](https://goreportcard.com/report/github.com/Mparaiso/appengine)
