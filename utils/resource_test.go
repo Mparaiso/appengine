@@ -119,7 +119,7 @@ func SubTestResourcePost400(t *testing.T, instance aetest.Instance, resource *ut
 	message := &struct{ Errors struct{ Email []string } }{}
 	err = json.NewDecoder(response.Body).Decode(message)
 	test.Fatal(t, err, nil)
-	test.Fatal(t, len(message.Errors.Email), 1)
+	test.Fatal(t, len(message.Errors.Email), 1, "Email errors should have 1 element")
 }
 
 func SubTestEndPointGet(t *testing.T, instance aetest.Instance, id int64, resource *utils.Resource) {
@@ -145,7 +145,7 @@ func SubTestEndPointIndex(t *testing.T, instance aetest.Instance, resource *util
 	message := []*TestUser{}
 	err = json.NewDecoder(response.Body).Decode(&message)
 	test.Fatal(t, err, nil)
-	test.Fatal(t, len(message), 1)
+	test.Fatal(t, len(message), 1, "[]*TestUser should have 1 element")
 }
 
 func SubTestEndPointPut(t *testing.T, instance aetest.Instance, resource *utils.Resource, ID int64) {
