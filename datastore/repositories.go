@@ -23,12 +23,17 @@ import (
 	"google.golang.org/appengine/datastore"
 )
 
-// Kind list app kinds
-var Kind = struct{ Users, Migrations, Snippets, Categories, Roles, UserRoles string }{
-	"Users", "Migrations", "Snippets", "Categories", "Roles", "UserRoles",
+// Repository is a entity repository
+type Repository interface {
+	Create(entity Entity) error
+	CreateMulti(entities ...Entity) error
+	Update(entity Entity) error
+	Delete(entity Entity) error
+	FindByID(id int64, entity Entity) error
+	FindAll(entities interface{}) error
+	FindBy(query Query, result interface{}) error
+	Count(query Query) (int, error)
 }
-
-var _ Repository = new(DefaultRepository)
 
 // DefaultRepository is the default implementation of Repository
 type DefaultRepository struct {

@@ -45,18 +45,6 @@ type LockedEntity interface {
 	IsLocked() bool
 }
 
-// Repository is a entity repository
-type Repository interface {
-	Create(entity Entity) error
-	CreateMulti(entities ...Entity) error
-	Update(entity Entity) error
-	Delete(entity Entity) error
-	FindByID(id int64, entity Entity) error
-	FindAll(entities interface{}) error
-	FindBy(query Query, result interface{}) error
-	Count(query Query) (int, error)
-}
-
 // ContextFactory creates a ContextProvider
 type ContextFactory interface {
 	Create(r *http.Request) context.Context
