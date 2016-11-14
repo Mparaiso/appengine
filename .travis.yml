@@ -2,7 +2,7 @@
   "language": "go",
   "install": [
     "export PATH=\"$PATH:$HOME/sdk/go_appengine/\"",
-    "curl -o sdk.zip \"https://storage.googleapis.com/appengine-sdks/featured/go_appengine_sdk_linux_amd64-1.9.24.zip\"",
+    "curl -o sdk.zip \"https://storage.googleapis.com/appengine-sdks/featured/go_appengine_sdk_linux_amd64-1.9.40.zip\"",
     "unzip sdk.zip -d $HOME/sdk"
   ],
   "script": [

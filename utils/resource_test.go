@@ -108,7 +108,7 @@ func SubTestResourcePost(t *testing.T, instance aetest.Instance) {
 // it responds with an error message
 func SubTestResourcePost400(t *testing.T, instance aetest.Instance, resource *utils.Resource) {
 	buffer := new(bytes.Buffer)
-	user := &TestUser{Username: "johndoe", Email: "", PlainPassword: "password"}
+	user := &TestUser{Username: "johndoe", PlainPassword: "password"}
 	err := json.NewEncoder(buffer).Encode(user)
 	test.Fatal(t, err, nil)
 	request, err := instance.NewRequest("POST", "/", buffer)
@@ -119,6 +119,7 @@ func SubTestResourcePost400(t *testing.T, instance aetest.Instance, resource *ut
 	message := &struct{ Errors struct{ Email []string } }{}
 	err = json.NewDecoder(response.Body).Decode(message)
 	test.Fatal(t, err, nil)
+	t.Log(err)
 	test.Fatal(t, len(message.Errors.Email), 1, "Email errors should have 1 element")
 }
 
