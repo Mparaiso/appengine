@@ -13,4 +13,4 @@ This library is a collection of utilities for appengine standard environment dev
 Features :
 
  - [x] Datastore repositories
- - [x] Datastore entity rest end point for writing quick APIS
+ - [x] Restful resources for quick API design

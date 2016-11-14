@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"testing"
 
 	"github.com/Mparaiso/appengine/utils"
@@ -98,7 +97,7 @@ func SubTestEndPointIndex(t *testing.T, instance aetest.Instance, resource *util
 	message := []*TestUser{}
 	err = json.NewDecoder(response.Body).Decode(&message)
 	test.Fatal(t, err, nil)
-	test.Error(t, len(message), 1)
+	test.Fatal(t, len(message), 1)
 }
 
 func SubTestEndPointPut(t *testing.T, instance aetest.Instance, resource *utils.Resource, ID int64) {
@@ -137,8 +136,8 @@ func SubTestEndPointDelete(t *testing.T, instance aetest.Instance, resource *uti
 
 // LogFunc the name of the test function
 func LogFunc(t *testing.T) {
-	ptr, _, _, ok := runtime.Caller(1)
-	if ok {
-		t.Log(runtime.FuncForPC(ptr).Name(), "\n")
-	}
+	// ptr, _, _, ok := runtime.Caller(1)
+	// if ok {
+	// 	t.Log(runtime.FuncForPC(ptr).Name(), "\n")
+	// }
 }
