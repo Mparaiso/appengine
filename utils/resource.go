@@ -20,13 +20,20 @@ import (
 	"net/http"
 	"reflect"
 
+	"golang.org/x/net/context"
+
 	"github.com/Mparaiso/appengine/datastore"
 	"google.golang.org/appengine"
 )
 
-type validationErrors interface {
-	GetValidationErrors() map[string][]string
+// Entity is a datastore entity
+type Entity interface {
+	GetID() int64
+	SetID(int64)
 }
+
+// Validator valides an entity or return an error if the entity is invalid.
+type Validator func(cxt context.Context, r *http.Request, entity Entity) error
 
 // CreatedMessage is returned when a new entity is created
 type CreatedMessage struct {
@@ -38,131 +45,177 @@ type CreatedMessage struct {
 // Resource is a reusable rest endpoint
 type Resource struct {
 	// Prototype is a value used to create other values
-	Prototype datastore.Entity
-	protoType reflect.Type
+	Prototype       Entity
+	CreatePrototype Entity
+	UpdatePrototype Entity
+	protoType       reflect.Type
 	// the datastore kind
 	Kind          string
 	Signal        datastore.Signal
 	ResultPerPage int
 	ErrorFunction func(writer http.ResponseWriter, Error error, status int)
+	validator     Validator
+}
+
+// GetCreatePrototype returns resource.CreatePrototype
+func (resource Resource) GetCreatePrototype() Entity {
+	return resource.CreatePrototype
+}
+
+// SetCreatePrototype sets resource.CreatePrototype
+func (resource *Resource) SetCreatePrototype(CreatePrototype Entity) {
+	resource.CreatePrototype = CreatePrototype
+}
+
+// GetUpdatePrototype returns resource.UpdatePrototype
+func (resource Resource) GetUpdatePrototype() Entity {
+	return resource.UpdatePrototype
+}
+
+// SetUpdatePrototype sets resource.UpdatePrototype
+func (resource *Resource) SetUpdatePrototype(UpdatePrototype Entity) {
+	resource.UpdatePrototype = UpdatePrototype
 }
 
 // NewResource creates a new EndPoint
-func NewResource(prototype datastore.Entity, Kind string) *Resource {
+func NewResource(prototype Entity, Kind string) *Resource {
 	return &Resource{Prototype: prototype, Kind: Kind}
 }
 
+// SetValidator sets a validator that can be used to validate an entity before it is persisted
+// the validator MUST return the entity AND nil if no error
+func (resource *Resource) SetValidator(validator Validator) {
+	resource.validator = validator
+}
+
+// GetValidator returns resource.Validator
+func (resource Resource) GetValidator() Validator {
+	return resource.validator
+}
+
+// Validate validates an entity before datastore persistance
+func (resource Resource) Validate(ctx context.Context, r *http.Request, entity Entity) error {
+	if validator := resource.GetValidator(); validator == nil {
+		return nil
+	} else {
+		return validator(ctx, r, entity)
+	}
+}
+
 // GetKind returns the endpoint's kind
-func (e *Resource) GetKind() string {
-	return e.Kind
+func (resource *Resource) GetKind() string {
+	return resource.Kind
 }
 
 // GetErrorFunction returns the function used to manage errors
-func (e *Resource) GetErrorFunction() func(http.ResponseWriter, error, int) {
-	if e.ErrorFunction == nil {
-		e.ErrorFunction = func(w http.ResponseWriter, err error, status int) { http.Error(w, err.Error(), status) }
+func (resource *Resource) GetErrorFunction() func(http.ResponseWriter, error, int) {
+	if resource.ErrorFunction == nil {
+		resource.ErrorFunction = func(w http.ResponseWriter, err error, status int) { http.Error(w, err.Error(), status) }
 	}
-	return e.ErrorFunction
+	return resource.ErrorFunction
 }
 
-// GetPrototype returns e.Prototype
-func (e *Resource) GetPrototype() reflect.Type {
-	if e.protoType == nil {
-		e.protoType = reflect.Indirect(reflect.ValueOf(e.Prototype)).Type()
+// GetPrototype returns r.Prototype
+func (r *Resource) GetPrototype() reflect.Type {
+	if r.protoType == nil {
+		r.protoType = reflect.Indirect(reflect.ValueOf(r.Prototype)).Type()
 	}
-	return e.protoType
+	return r.protoType
 }
 
 // Index list resources
-func (e Resource) Index(w http.ResponseWriter, r *http.Request) {
+func (resource Resource) Index(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
-	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
-	entities := reflect.New(reflect.SliceOf(e.GetPrototype())).Interface()
+	repository := datastore.NewDefaultRepositoryWithSignal(ctx, resource.Kind, resource.GetSignal())
+	entities := reflect.New(reflect.SliceOf(resource.GetPrototype())).Interface()
 	err := repository.FindAll(entities)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 		return
 	}
 	err = json.NewEncoder(w).Encode(entities)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 	}
 }
 
 // GetSignal returns a signal dispatcher
-func (e *Resource) GetSignal() datastore.Signal {
-	if e.Signal == nil {
-		e.Signal = datastore.NewDefaultSignal()
+func (r *Resource) GetSignal() datastore.Signal {
+	if r.Signal == nil {
+		r.Signal = datastore.NewDefaultSignal()
 	}
-	return e.Signal
+	return r.Signal
 }
 
 // Get fetches a resource
-func (e Resource) Get(w http.ResponseWriter, r *http.Request) {
+func (resource Resource) Get(w http.ResponseWriter, r *http.Request) {
 
 	var id int64
-	_, err := fmt.Sscanf(r.URL.Query().Get(":"+e.Kind), "%d", &id)
+	_, err := fmt.Sscanf(r.URL.Query().Get(":"+resource.Kind), "%d", &id)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusBadRequest)
+		resource.GetErrorFunction()(w, err, http.StatusBadRequest)
 		return
 	}
-	entity := reflect.New(e.GetPrototype()).Interface().(datastore.Entity)
+	entity := reflect.New(resource.GetPrototype()).Interface().(Entity)
 	ctx := appengine.NewContext(r)
-	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
+	repository := datastore.NewDefaultRepositoryWithSignal(ctx, resource.Kind, resource.GetSignal())
 	err = repository.FindByID(id, entity)
 	if err == datastore.ErrNoSuchEntity {
-		e.GetErrorFunction()(w, err, http.StatusNotFound)
+		resource.GetErrorFunction()(w, err, http.StatusNotFound)
 		return
 	} else if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 		return
 	}
 	err = json.NewEncoder(w).Encode(entity)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 	}
 }
 
 // Put updates a resource
-func (e Resource) Put(w http.ResponseWriter, r *http.Request) {
-	entity := reflect.New(e.GetPrototype()).Interface().(datastore.Entity)
+func (resource Resource) Put(w http.ResponseWriter, r *http.Request) {
 	var id int64
-	_, err := fmt.Sscanf(r.URL.Query().Get(":"+e.Kind), "%d", &id)
+	_, err := fmt.Sscanf(r.URL.Query().Get(":"+resource.Kind), "%d", &id)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusBadRequest)
+		resource.GetErrorFunction()(w, err, http.StatusBadRequest)
 		return
 	}
+	entity := reflect.New(resource.GetPrototype()).Interface().(Entity)
+	err = json.NewDecoder(r.Body).Decode(entity)
+	entity.SetID(id)
 	ctx := appengine.NewContext(r)
-
-	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
-	err = repository.Update(entity)
-	if validationErrors, ok := err.(validationErrors); ok {
+	if err = resource.Validate(ctx, r, entity); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(validationErrors.GetValidationErrors())
+		json.NewEncoder(w).Encode(err)
 		return
-	} else if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+	}
+	repository := datastore.NewDefaultRepositoryWithSignal(ctx, resource.Kind, resource.GetSignal())
+	err = repository.Update(entity)
+	if err != nil {
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
 // Delete deletes a resource
-func (e Resource) Delete(w http.ResponseWriter, r *http.Request) {
+func (resource Resource) Delete(w http.ResponseWriter, r *http.Request) {
 
-	entity := reflect.New(e.GetPrototype()).Interface().(datastore.Entity)
 	var id int64
-	_, err := fmt.Sscanf(r.URL.Query().Get(":"+e.Kind), "%d", &id)
+	_, err := fmt.Sscanf(r.URL.Query().Get(":"+resource.Kind), "%d", &id)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusBadRequest)
+		resource.GetErrorFunction()(w, err, http.StatusBadRequest)
 		return
 	}
+	entity := reflect.New(resource.GetPrototype()).Interface().(Entity)
+	entity.SetID(id)
 	ctx := appengine.NewContext(r)
 
-	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
+	repository := datastore.NewDefaultRepositoryWithSignal(ctx, resource.Kind, resource.GetSignal())
 	err = repository.Delete(entity)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -171,26 +224,26 @@ func (e Resource) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Post creates a resource
-func (e Resource) Post(w http.ResponseWriter, r *http.Request) {
-	entity := reflect.New(e.GetPrototype()).Interface()
+func (resource Resource) Post(w http.ResponseWriter, r *http.Request) {
+	entity := reflect.New(resource.GetPrototype()).Interface().(Entity)
 
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(entity)
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusBadRequest)
+		resource.GetErrorFunction()(w, err, http.StatusBadRequest)
 		return
 	}
 	ctx := appengine.NewContext(r)
 
-	repository := datastore.NewDefaultRepositoryWithSignal(ctx, e.Kind, e.GetSignal())
-
-	err = repository.Create(entity.(datastore.Entity))
-	if validationErrors, ok := err.(validationErrors); ok {
+	repository := datastore.NewDefaultRepositoryWithSignal(ctx, resource.Kind, resource.GetSignal())
+	if err = resource.Validate(ctx, r, entity); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(validationErrors.GetValidationErrors())
+		json.NewEncoder(w).Encode(err)
 		return
-	} else if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+	}
+	err = repository.Create(entity.(Entity))
+	if err != nil {
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -199,8 +252,8 @@ func (e Resource) Post(w http.ResponseWriter, r *http.Request) {
 		Message string
 		ID      int64
 	}
-	err = json.NewEncoder(w).Encode(CreatedMessage{Status: 201, Message: "Created", ID: entity.(datastore.Entity).GetID()})
+	err = json.NewEncoder(w).Encode(CreatedMessage{Status: 201, Message: "Created", ID: entity.(Entity).GetID()})
 	if err != nil {
-		e.GetErrorFunction()(w, err, http.StatusInternalServerError)
+		resource.GetErrorFunction()(w, err, http.StatusInternalServerError)
 	}
 }
